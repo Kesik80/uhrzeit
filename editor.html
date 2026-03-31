@@ -362,17 +362,29 @@ function drawColoredLine(words,cx,cy){
         ctx.fillText(w.t,sx+ww/2,cy);sx+=ww;
     });
 }
-function drawClockTexts(xC,yC,R){
-    var baseR=R+12+8,fs=Math.round(R*0.115),lineH=fs*1.3;
-    ctx.font='bold '+fs+'px Arial';
-    ctx.textAlign='center';ctx.textBaseline='middle';
+function drawClockTexts(xC, yC, R) {
+    var bezelOuter = R + 12;
+    var gap = 8;
+    var baseR = bezelOuter + gap;
+
+    var fs = Math.round(R * 0.115);
+    var lineH = fs * 1.3;
+
+    ctx.font = 'bold ' + fs + 'px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
     clearShadow(ctx);
-    CLOCK_TEXTS.forEach(function(cfg){
-        var posAngle=(cfg.textHour-3)*Math.PI/6;
-        var r=baseR*cfg.radius_k;
-        var x=xC+r*Math.cos(posAngle),y=yC+r*Math.sin(posAngle);
-        var totalH=(cfg.lines.length-1)*lineH;
-        cfg.lines.forEach(function(line,i){drawColoredLine(line,x,y-totalH/2+i*lineH);});
+
+    CLOCK_TEXTS.forEach(function(cfg) {
+        var posAngle = (cfg.textHour - 3) * Math.PI / 6;
+        var r = baseR * cfg.radius_k;
+        var x = xC + r * Math.cos(posAngle);
+        var y = yC + r * Math.sin(posAngle);
+
+        var totalH = (cfg.lines.length - 1) * lineH;
+        cfg.lines.forEach(function(line, i) {
+            drawColoredLine(line, x, y - totalH / 2 + i * lineH);
+        });
     });
 }
 function drawHand(context,angle,length,xC,yC,width,color){

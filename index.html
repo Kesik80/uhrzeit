@@ -80,6 +80,7 @@
         <canvas id="myCanvas"></canvas>
     </div>
     <p class="hint">Нажмите на циферблат — остановите стрелки и меняйте время</p>
+    <a href="editor.html" style="font-size:11px;color:#999;text-decoration:none;margin-top:4px">⚙ Редактор надписей</a>
 
 <script>
     var hour   = 0;
@@ -694,6 +695,17 @@
         displayCanvas();
         showGermanTime();
         startClock();
+    });
+
+    // Перечитываем настройки если редактор что-то изменил в localStorage
+    window.addEventListener('storage', function(e) {
+        if (e.key === STORAGE_KEY || e.key === ARC_KEY) {
+            var newTexts = loadFromStorage();
+            if (newTexts) CLOCK_TEXTS = newTexts;
+            var newArc = loadArcFromStorage();
+            if (newArc) Object.assign(ARC, newArc);
+            displayCanvas();
+        }
     });
 </script>
 </body>

@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Wie spät ist es?</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100dvh;
+            padding: 12px 10px 20px;
+            gap: 8px;
+            font-family: Tahoma, sans-serif;
+            background: #ffffff;
+        }
+
+        h1 {
+            font-size: clamp(16px, 5vw, 26px);
+            font-weight: bold;
+            text-align: center;
+        }
+
+        #digitalClock {
+            font-size: clamp(22px, 7vw, 40px);
+            font-weight: bold;
+            color: blue;
+            text-align: center;
+            font-family: Tahoma, sans-serif;
+            letter-spacing: 0.05em;
+        }
+
+        #clock {
+            font-size: clamp(16px, 5vw, 24px);
+            color: #FF5733;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        #clock-ru {
+            font-size: clamp(14px, 4.2vw, 20px);
+            color: blue;
+            text-align: center;
+        }
+
+        .canvas-wrap {
+            width: 100%;
+            max-width: 520px;
+            /* Канвас квадратный, но оригинал 520x440 — сохраняем пропорцию */
+            aspect-ratio: 600 / 640;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+
+        .hint {
+            font-size: clamp(10px, 3vw, 13px);
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Wie spät ist es?</h1>
+    <div id="digitalClock">00:00:00</div>
+    <div id="clock"> </div>
+    <div id="clock-ru"> </div>
+    <div class="canvas-wrap">
+        <canvas id="myCanvas"></canvas>
+    </div>
+    <p class="hint">Нажмите на циферблат — остановите стрелки и меняйте время</p>
+
+<script>
+    var hour   = 0;
+    var minute = 0;
+    var second = 0;
+
+    var clockInterval = null;
+    var idleTimeout   = null;
+    var isClockPaused = false;
+
+    // Константы оригинала (масштабируются при resize)
+    const ORIG_W = 600;
+    const ORIG_H = 640;
+
+    // ─── Настройки из редактора (localStorage) ───────────────────────────────
+    const STORAGE_KEY = 'uhrzeit_clock_texts_v4';
+    const ARC_KEY     = 'uhrzeit_arc_settings_v2';
+
+    function loadFromStorage() {
+        try {
+            var s = localStorage.getItem(STORAGE_KEY);
+            if (s) { var p = JSON.parse(s); if (p[0] && p[0].lines) return p; }
+        } catch(e) {}
+        return null;
+    }
+    function loadArcFromStorage() {
+        try {
+            var s = localStorage.getItem(ARC_KEY);
+            if (s) return JSON.parse(s);
+        } catch(e) {}
+        return null;
+    }
+    // -------------------------------------------------
+
+    // -------------- Отступы -------------------------
+    const bezelThickness = 12;
+    const padding        = 40;
+    const textOffset     = 45;
+    // -------------------------------------------------
+
+    // ─── Настройки дуг — читаем из редактора или дефолт ───
+    const ARC_DEFAULT = {
+        lineWidth:   3,
+        arrowSize:   30,
+        radiusExtra: 18,
+        colorRight: '#FFC04C',
+        colorLeft:  '#FF8970',
+    };
+    const ARC = Object.assign({}, ARC_DEFAULT, loadArcFromStorage());
+
+    // ─── CANVAS RESIZE ───────────────────────────────────────────────────────
+    const canvas = document.getElementById('myCanvas');
+    const ctx    = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        const wrap = canvas.parentElement;
+        canvas.width  = wrap.clientWidth;
+        canvas.height = Math.round(wrap.clientWidth * ORIG_H / ORIG_W);
+        displayCanvas();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Масштаб относительно оригинала
+    function scale() { return canvas.width / ORIG_W; }
+
+    // ─── DIGITAL CLOCK ───────────────────────────────────────────────────────
+    function updateDigitalClock() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        document.getElementById('digitalClock').textContent = `${h}:${m}:${s}`;
+    }
+    setInterval(updateDigitalClock, 1000);
+    updateDigitalClock();
+
+    // ─── START / STOP ────────────────────────────────────────────────────────
+    function startClock() {
+        if (!clockInterval) {
+            clockInterval = setInterval(function () {
+                var d  = new Date();
+                hour   = d.getHours();
+                minute = d.getMinutes();
+                second = d.getSeconds();
+                displayCanvas();
+                showGermanTime();
+            }, 1000);
+            isClockPaused = false;
+        }
+    }
+
+    function stopClock() {
+        if (clockInterval) {
+            clearInterval(clockInterval);
+            clockInterval = null;
+            isClockPaused = true;
+        }
+    }
+
+    function resetIdleTimer() {
+        clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(startClock, 30000);
+    }
+
+    // ─── GERMAN TIME LOGIC (исправленная) ────────────────────────────────────
+    var hoursDe = ['zwölf','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf'];
+
+    // Фразы для шагов 0..11 (каждые 5 минут)
+    var phrasesDe = [
+        '',              // 0  — «X Uhr»
+        'fünf nach',     // 5
+        'zehn nach',     // 10
+        'Viertel nach',  // 15
+        'zwanzig nach',  // 20
+        'fünf vor halb', // 25
+        'halb',          // 30
+        'fünf nach halb',// 35
+        'zwanzig vor',   // 40
+        'Viertel vor',   // 45
+        'zehn vor',      // 50
+        'fünf vor',      // 55
+    ];
+
+    // Русский: родительный (после/половина) — «пять минут ПЕРВОГО»
+    var hoursRuGen = ['двенадцатого','первого','второго','третьего','четвёртого','пятого','шестого','седьмого','восьмого','девятого','десятого','одиннадцатого'];
+    // Русский: именительный — для «ровно»
+    var hoursRuNom = ['двенадцать','час','два','три','четыре','пять','шесть','семь','восемь','девять','десять','одиннадцать'];
+    // Русский: родительный для «без» — «без пяти ДВУХ»
+    var hoursRuBez = ['двенадцати','часа','двух','трёх','четырёх','пяти','шести','семи','восьми','девяти','десяти','одиннадцати'];
+
+    var phrasesRu = [
+        '',                    // 0
+        'пять минут',          // 5
+        'десять минут',        // 10
+        'четверть',            // 15
+        'двадцать минут',      // 20
+        'двадцать пять минут', // 25
+        'половина',            // 30
+        'тридцать пять минут', // 35
+        'без двадцати',        // 40
+        'без четверти',        // 45
+        'без десяти',          // 50
+        'без пяти',            // 55
+    ];
+
+    function hourForm(h) {
+        if (h === 1) return '';       // «Ровно час» — без добавки
+        if (h >= 2 && h <= 4) return 'часа';
+        return 'часов';
+    }
+
+    function showGermanTime() {
+        var h12   = hour % 12;
+        var mStep = Math.floor(minute / 5); // 0..11
+        var textDe, textRu;
+
+        if (minute === 0) {
+            // Ровно: X Uhr
+            textDe = 'Es ist ' + hoursDe[h12] + ' Uhr';
+            var hf = hourForm(h12);
+            textRu = 'Ровно ' + hoursRuNom[h12] + (hf ? ' ' + hf : '');
+
+        } else if (mStep >= 1 && mStep <= 5) {
+            // 5–25 → «fünf/zehn/... nach ТЕКУЩЕГО»
+            textDe = 'Es ist ' + phrasesDe[mStep] + ' ' + hoursDe[h12];
+            textRu = phrasesRu[mStep] + ' ' + hoursRuGen[h12];
+
+        } else if (mStep === 6) {
+            // 30 → «halb СЛЕДУЮЩЕГО»
+            var nextH6 = (h12 + 1) % 12;
+            textDe = 'Es ist halb ' + hoursDe[nextH6];
+            textRu = 'Половина ' + hoursRuGen[nextH6];
+
+        } else if (mStep === 7) {
+            // 35 → «fünf nach halb СЛЕДУЮЩЕГО»
+            var nextH7 = (h12 + 1) % 12;
+            textDe = 'Es ist fünf nach halb ' + hoursDe[nextH7];
+            textRu = 'Тридцать пять минут ' + hoursRuGen[nextH7];
+
+        } else {
+            // 40–55 → «... vor СЛЕДУЮЩЕГО» (без ...)
+            var nextH = (h12 + 1) % 12;
+            textDe = 'Es ist ' + phrasesDe[mStep] + ' ' + hoursDe[nextH];
+            // Родительный падеж после «без»:
+            // nextH=0 → «двенадцати», nextH=1 → «часа» неверно → правильно «час» (для «без пяти час»)
+            var ruHour;
+            if (nextH === 1) ruHour = 'часа';        // без пяти часа — разг. норма
+            else if (nextH === 0) ruHour = 'двенадцати';
+            else ruHour = hoursRuBez[nextH];
+            textRu = phrasesRu[mStep] + ' ' + ruHour;
+        }
+
+        document.getElementById('clock').textContent    = textDe;
+        document.getElementById('clock-ru').textContent = textRu;
+    }
+
+    // ─── ОРИГИНАЛЬНЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (тени) ─────────────────────────
+    function applyShadow(context, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY) {
+        context.shadowColor   = shadowColor;
+        context.shadowBlur    = shadowBlur;
+        context.shadowOffsetX = shadowOffsetX;
+        context.shadowOffsetY = shadowOffsetY;
+    }
+    function clearShadow(context) {
+        context.shadowColor   = 'transparent';
+        context.shadowBlur    = 0;
+        context.shadowOffsetX = 0;
+        context.shadowOffsetY = 0;
+    }
+
+    // ─── ОРИГИНАЛЬНЫЙ ЦИФЕРБЛАТ (адаптирован под масштаб) ────────────────────
+
+    function drawArrowhead(context, x, y, angle, color) {
+        const size = ARC.arrowSize;
+        const lineAngle = 20 * (Math.PI / 180);
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x - size * Math.cos(angle + lineAngle), y - size * Math.sin(angle + lineAngle));
+        context.lineTo(x - size * Math.cos(angle - lineAngle), y - size * Math.sin(angle - lineAngle));
+        context.closePath();
+        context.fillStyle = color;
+        context.fill();
+    }
+
+    function getAngles(startHour, endHour) {
+        const startAngle = (startHour - 3) * (Math.PI / 6);
+        const endAngle   = (endHour   - 3) * (Math.PI / 6);
+        return { startAngle, endAngle };
+    }
+
+    function drawArcsWithTriangles(context, xCenter, yCenter, radius, arcPad) {
+        const right = { startHour: 12.05, endHour: 5,     color: ARC.colorRight };
+        const left  = { startHour: 7,     endHour: 11.95, color: ARC.colorLeft  };
+        const adjustedRadius = radius + ARC.radiusExtra + bezelThickness;
+
+        [right, left].forEach(({ startHour, endHour, color }) => {
+            const { startAngle, endAngle } = getAngles(startHour, endHour);
+            context.beginPath();
+            context.strokeStyle = color;
+            context.lineWidth   = ARC.lineWidth;
+            context.arc(xCenter, yCenter, adjustedRadius, startAngle, endAngle);
+            context.stroke();
+
+            const triangleX = xCenter + adjustedRadius * Math.cos(endAngle);
+            const triangleY = yCenter + adjustedRadius * Math.sin(endAngle);
+            const triangleAngle = Math.atan2(triangleY - yCenter, triangleX - xCenter);
+            drawArrowhead(context, triangleX, triangleY, triangleAngle + Math.PI / 2, color);
+        });
+    }
+
+    function drawSectors(context, xCenter, yCenter, radius) {
+        const sectors = [
+            { startHour: 6,  endHour: 7,  color: 'rgba(255, 242, 226, 0.3)' },
+            { startHour: 5,  endHour: 6,  color: 'rgba(255, 187, 165, 0.3)' },
+            { startHour: 7,  endHour: 12, color: 'rgba(255, 187, 165, 0.3)' },
+            { startHour: 12, endHour: 5,  color: 'rgba(255, 242, 226, 0.3)' },
+        ];
+        sectors.forEach(({ startHour, endHour, color }) => {
+            const { startAngle, endAngle } = getAngles(startHour, endHour);
+            context.beginPath();
+            context.fillStyle = color;
+            context.moveTo(xCenter, yCenter);
+            context.arc(xCenter, yCenter, radius, startAngle, endAngle);
+            context.lineTo(xCenter, yCenter);
+            context.fill();
+        });
+    }
+
+    function drawLinesFromCenter(context, xCenter, yCenter, radius) {
+        context.strokeStyle = '#000000';
+        context.lineWidth   = 1 * scale();
+        const hours = [7, 6, 5, 0];
+        hours.forEach(function(h) {
+            const angle = (h - 3) * (Math.PI / 6);
+            context.beginPath();
+            context.moveTo(xCenter, yCenter);
+            context.lineTo(xCenter + radius * Math.cos(angle), yCenter + radius * Math.sin(angle));
+            context.stroke();
+        });
+    }
+
+    function getTextAngle(textHour) {
+        return (textHour - 3) * (Math.PI / 6);
+    }
+
+    function degreesToRadians(degrees) {
+        return degrees * (Math.PI / 180);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // КОНФИГУРАЦИЯ НАДПИСЕЙ — редактируй здесь или через редактор
+    // textHour  : позиция на циферблате (можно дробное, напр. 5.3)
+    // radius_k  : множитель радиуса (1.0 = прямо за безелем)
+    // rotDeg    : доворот в градусах (0 = вдоль окружности, -90 = горизонт. справа)
+    // color     : цвет надписи
+    // ═══════════════════════════════════════════════════════════════════
+    // Формат: lines — массив строк, каждая строка — массив {t, c}
+    // Читаем из редактора (localStorage) или используем дефолт
+    var CLOCK_TEXTS_DEFAULT = [
+        { textHour: 11.9, radius_k: 0.96, lines: [[{t:'... ', c:'#888888'}, {t:'Uhr ', c:'#aa2200'}]] },
+        { textHour:  1.2, radius_k: 1.00, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  2.2, radius_k: 1.08, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  3.0, radius_k: 1.04, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  3.8, radius_k: 1.10, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  4.7, radius_k: 1.08, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  5.9, radius_k: 0.93, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  7.2, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  8.1, radius_k: 1.04, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  9.0, radius_k: 1.01, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
+        { textHour:  9.9, radius_k: 1.06, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour: 10.9, radius_k: 0.98, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    ];
+    var CLOCK_TEXTS = loadFromStorage() || CLOCK_TEXTS_DEFAULT;
+
+    // Рисует строку слов с разными цветами — контур вместо blur-тени
+    function drawColoredLine(context, words, cx, cy) {
+        var totalW = 0;
+        words.forEach(function(w) { totalW += context.measureText(w.t).width; });
+        var startX = cx - totalW / 2;
+        words.forEach(function(w) {
+            var ww = context.measureText(w.t).width;
+            var tx = startX + ww / 2;
+            // Сначала контур (адаптируется к любому фону)
+            context.strokeStyle = 'rgba(255,255,255,0.85)';
+            context.lineWidth   = 3;
+            context.lineJoin    = 'round';
+            context.strokeText(w.t, tx, cy);
+            // Затем заливка
+            context.fillStyle = w.c;
+            context.fillText(w.t, tx, cy);
+            startX += ww;
+        });
+    }
+
+    function drawText(context, xCenter, yCenter, radius, pad) {
+        const bezelOuter = radius + 12;
+        const gap        = 8;
+        const baseR      = bezelOuter + gap;
+        const fs         = Math.round(radius * 0.115);
+        const lineH      = fs * 1.3;
+
+        context.font         = `bold ${fs}px Arial`;
+        context.textAlign    = 'left';
+        context.textBaseline = 'middle';
+        // Без blur-тени — используем strokeText в drawColoredLine
+        clearShadow(context);
+
+        CLOCK_TEXTS.forEach(function(cfg) {
+            const posAngle = (cfg.textHour - 3) * Math.PI / 6;
+            const r        = baseR * cfg.radius_k;
+            const x        = xCenter + r * Math.cos(posAngle);
+            const y        = yCenter + r * Math.sin(posAngle);
+            const totalH   = (cfg.lines.length - 1) * lineH;
+            cfg.lines.forEach(function(line, i) {
+                drawColoredLine(context, line, x, y - totalH / 2 + i * lineH);
+            });
+        });
+    }
+
+    function drawHand(context, angle, length, xCenter, yCenter, width, color) {
+        context.beginPath();
+        context.lineWidth   = width * scale();
+        context.strokeStyle = color;
+        context.lineCap     = 'round';
+        context.moveTo(xCenter, yCenter);
+        context.lineTo(
+            xCenter + length * Math.cos(angle - Math.PI / 2),
+            yCenter + length * Math.sin(angle - Math.PI / 2)
+        );
+        context.stroke();
+        context.closePath();
+    }
+
+    function displayCanvas() {
+        const s = scale();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        var radiusClock  = (ORIG_W - 2 * padding) / 2 - 50;
+        var xCenterClock = ORIG_W / 2;
+        var yCenterClock = ORIG_H / 2 - 20;
+
+        // Применяем масштаб через transform
+        ctx.save();
+        ctx.scale(s, s);
+
+        drawArcsWithTriangles(ctx, xCenterClock, yCenterClock, radiusClock - padding, 0);
+        drawSectors(ctx, xCenterClock, yCenterClock, radiusClock - padding);
+        drawLinesFromCenter(ctx, xCenterClock, yCenterClock, radiusClock - padding);
+        drawText(ctx, xCenterClock, yCenterClock, radiusClock, padding);
+
+        var radiusNum = radiusClock - padding - 15;
+
+        // Деления
+        for (var tm = 0; tm < 60; tm++) {
+            ctx.beginPath();
+            ctx.strokeStyle = tm % 15 === 0 ? '#000000' : (tm % 5 === 0 ? '#000000' : '#666666');
+            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : '#cccccc';
+
+            if (tm % 15 === 0) {
+                ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+            } else {
+                ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+            }
+
+            if (tm % 15 === 0) {
+                ctx.lineWidth = 2;
+                var rp  = 5;
+                var xPM = xCenterClock + radiusNum * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yPM = yCenterClock - radiusNum * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                ctx.arc(xPM, yPM, rp, 0, 2 * Math.PI, true);
+                ctx.fill(); ctx.stroke();
+            } else {
+                var lineLength = tm % 5 === 0 ? 10 : 6;
+                var offset     = lineLength === 6 ? 3 : 6;
+                var xStart = xCenterClock + (radiusNum - offset) * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yStart = yCenterClock - (radiusNum - offset) * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var xEnd   = xCenterClock + (radiusNum - offset + lineLength) * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yEnd   = yCenterClock - (radiusNum - offset + lineLength) * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                ctx.lineWidth = tm % 5 === 0 ? 3.5 : 2.5;
+                ctx.moveTo(xStart, yStart);
+                ctx.lineTo(xEnd, yEnd);
+                ctx.stroke();
+            }
+            ctx.closePath();
+        }
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        // Цифры
+        for (var th = 1; th <= 12; th++) {
+            ctx.beginPath();
+            ctx.font      = 'bold 32px Tahoma';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#000000';
+            var xT = xCenterClock + (radiusNum - 30) * Math.cos(-30 * th * (Math.PI / 180) + Math.PI / 2);
+            var yT = yCenterClock - (radiusNum - 30) * Math.sin(-30 * th * (Math.PI / 180) + Math.PI / 2);
+            ctx.fillText(th, xT, yT + 10);
+            ctx.closePath();
+        }
+
+        // Тень для стрелок
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+
+        drawHand(ctx, (hour % 12 + minute / 60) * (Math.PI / 6), radiusNum / 1.7, xCenterClock, yCenterClock, 6, '#000000');
+        drawHand(ctx, minute * (Math.PI / 30), radiusNum - 10, xCenterClock, yCenterClock, 4, '#000000');
+
+        if (!isClockPaused) {
+            drawHand(ctx, second * (Math.PI / 30), radiusNum - 20, xCenterClock, yCenterClock, 2, 'red');
+        }
+
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        // Центральная точка
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.strokeStyle = '#000000'; ctx.fillStyle = '#CCCCCC'; ctx.lineWidth = 3;
+        ctx.arc(xCenterClock, yCenterClock, 6, 0, 2 * Math.PI, true);
+        ctx.stroke(); ctx.fill(); ctx.closePath();
+        ctx.restore();
+
+        // Безель
+        const bezelInnerRadius = radiusClock - padding;
+        const bezelOuterRadius = bezelInnerRadius + bezelThickness;
+
+        var bezelGradient = ctx.createRadialGradient(
+            xCenterClock, yCenterClock, bezelInnerRadius,
+            xCenterClock, yCenterClock, bezelOuterRadius
+        );
+        bezelGradient.addColorStop(0,   '#333333');
+        bezelGradient.addColorStop(0.2, '#707070');
+        bezelGradient.addColorStop(0.5, '#505050');
+        bezelGradient.addColorStop(1,   '#000000');
+
+        ctx.save();
+        ctx.shadowBlur = 5; ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 4;
+        ctx.beginPath();
+        ctx.arc(xCenterClock, yCenterClock, bezelOuterRadius - bezelThickness / 2, 0, 2 * Math.PI, true);
+        ctx.lineWidth   = bezelThickness;
+        ctx.strokeStyle = bezelGradient;
+        ctx.stroke(); ctx.closePath();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(xCenterClock, yCenterClock, bezelInnerRadius, 0, 2 * Math.PI, true);
+        ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+
+        ctx.beginPath();
+        ctx.arc(xCenterClock, yCenterClock, bezelOuterRadius, 0, 2 * Math.PI, true);
+        ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+
+        // Стекло
+        var glassGradient = ctx.createRadialGradient(
+            xCenterClock, yCenterClock, radiusClock / 3,
+            xCenterClock, yCenterClock, radiusClock
+        );
+        glassGradient.addColorStop(0,   'rgba(255,255,255,0.35)');
+        glassGradient.addColorStop(0.4, 'rgba(200,200,200,0.2)');
+        glassGradient.addColorStop(0.7, 'rgba(50,50,50,0.1)');
+        glassGradient.addColorStop(1,   'rgba(0,0,0,0.25)');
+        ctx.beginPath();
+        ctx.arc(xCenterClock, yCenterClock, radiusClock - padding, 0, 2 * Math.PI, true);
+        ctx.fillStyle = glassGradient; ctx.fill(); ctx.closePath();
+
+        // Блик главный
+        ctx.beginPath();
+        var hlGrad = ctx.createRadialGradient(
+            xCenterClock - radiusClock / 3, yCenterClock - radiusClock / 3, 0,
+            xCenterClock - radiusClock / 3, yCenterClock - radiusClock / 3, radiusClock / 4
+        );
+        hlGrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+        hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = hlGrad;
+        ctx.arc(xCenterClock - radiusClock / 3, yCenterClock - radiusClock / 3, radiusClock / 4, 0, 2 * Math.PI, true);
+        ctx.fill(); ctx.closePath();
+
+        // Вторичный блик
+        ctx.beginPath();
+        ctx.ellipse(xCenterClock + radiusClock / 6, yCenterClock + radiusClock / 4,
+            radiusClock / 5, radiusClock / 12, Math.PI / 4, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill(); ctx.closePath();
+
+        // Тень по краям стекла
+        ctx.beginPath();
+        var edgeGrad = ctx.createRadialGradient(
+            xCenterClock, yCenterClock, radiusClock - padding - 5,
+            xCenterClock, yCenterClock, radiusClock - padding
+        );
+        edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        edgeGrad.addColorStop(1, 'rgba(0,0,0,0.2)');
+        ctx.arc(xCenterClock, yCenterClock, radiusClock - padding, 0, 2 * Math.PI, true);
+        ctx.fillStyle = edgeGrad; ctx.fill(); ctx.closePath();
+
+        // Маленький верхний блик
+        ctx.beginPath();
+        ctx.arc(xCenterClock - radiusClock / 4, yCenterClock - radiusClock / 3, radiusClock / 12, 0, 2 * Math.PI, true);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill(); ctx.closePath();
+
+        // Нижний блик
+        ctx.beginPath();
+        ctx.ellipse(xCenterClock, yCenterClock + radiusClock / 3, radiusClock / 3, radiusClock / 15, 0, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill(); ctx.closePath();
+
+        ctx.restore(); // снимаем scale(s, s)
+    }
+
+    // ─── TOUCH / CLICK ───────────────────────────────────────────────────────
+    function isTouchDevice() {
+        return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    }
+
+    function handleInteraction(clientX, clientY) {
+        var rect   = canvas.getBoundingClientRect();
+        var s      = scale();
+        // Переводим в оригинальные координаты
+        var x = (clientX - rect.left)  / s * (ORIG_W / rect.width  * s) - ORIG_W / 2;
+        var y = (clientY - rect.top)   / s * (ORIG_H / rect.height * s) - ORIG_H / 2;
+
+        // Упрощённый пересчёт: просто нормируем к оригиналу
+        var scX = ORIG_W / rect.width;
+        var scY = ORIG_H / rect.height;
+        x = (clientX - rect.left) * scX - ORIG_W / 2;
+        y = (clientY - rect.top)  * scY - ORIG_H / 2;
+
+        var dist        = Math.sqrt(x * x + y * y);
+        var radiusClock = (ORIG_W - 2 * padding) / 2 - 30;
+
+        if (dist > radiusClock) return;
+
+        stopClock();
+        resetIdleTimer();
+
+        var angle   = Math.atan2(y, x);
+        var degrees = ((angle * 180 / Math.PI) + 90 + 360) % 360;
+
+        var tolerance           = isTouchDevice() ? 20 : 15;
+        var adjustedInnerRadius = 120 - padding - tolerance;
+        var adjustedOuterRadius = 220 - padding + tolerance;
+
+        if (dist < adjustedInnerRadius + tolerance) {
+            hour = Math.round(degrees / 30) % 12;
+        } else if (dist >= adjustedInnerRadius - tolerance && dist <= adjustedOuterRadius + tolerance) {
+            minute = Math.round(degrees / 6) % 60;
+        }
+
+        displayCanvas();
+        showGermanTime();
+    }
+
+    canvas.addEventListener('click', function(e) {
+        handleInteraction(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        var t = e.changedTouches[0];
+        handleInteraction(t.clientX, t.clientY);
+    }, { passive: false });
+
+    // ─── INIT ─────────────────────────────────────────────────────────────────
+    window.addEventListener('load', function() {
+        resizeCanvas();
+        var d  = new Date();
+        hour   = d.getHours();
+        minute = d.getMinutes();
+        second = d.getSeconds();
+        displayCanvas();
+        showGermanTime();
+        startClock();
+    });
+</script>
+</body>
+</html>

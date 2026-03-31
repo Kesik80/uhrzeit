@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Редактор надписей — Uhrzeit</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:      #f0f2f5;
+            --surface: #ffffff;
+            --border:  #d0d5de;
+            --accent:  #1a6fc4;
+            --red:     #cc2244;
+            --muted:   #7a8099;
+            --text:    #1a1d2e;
+            --val:     #0066cc;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Tahoma, sans-serif;
+            font-size: 13px;
+        }
+
+        .layout {
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+        }
+
+        .top-panel {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 10px 6px;
+            gap: 4px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            font-size: 13px;
+            color: var(--accent);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .canvas-wrap {
+            width: 100%;
+            max-width: 520px;
+            aspect-ratio: 600 / 640;
+        }
+        canvas { width: 100%; height: 100%; display: block; }
+
+        .bottom-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 10px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .label-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 12px 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .card-title {
+            font-size: 13px;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        .btn-delete {
+            background: none;
+            border: 1px solid var(--red);
+            color: var(--red);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .btn-delete:active { background: #cc224411; }
+
+        .text-row {
+            display: grid;
+            grid-template-columns: 68px 1fr 34px;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .text-row label { color: var(--muted); font-size: 11px; }
+        .text-row input[type=text] {
+            background: #f7f8fa;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text);
+            font-family: monospace;
+            font-size: 12px;
+            padding: 3px 6px;
+            width: 100%;
+        }
+        .text-row input[type=color] {
+            width: 30px; height: 24px;
+            border: none; background: none;
+            cursor: pointer; padding: 0;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 68px 1fr 40px;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .row label { color: var(--muted); font-size: 11px; }
+        input[type=range] { width: 100%; accent-color: var(--accent); }
+        .val { color: var(--val); font-family: monospace; font-size: 11px; text-align: right; font-weight: bold; }
+
+        .btn-add {
+            background: none;
+            border: 1px dashed var(--accent);
+            color: var(--accent);
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 13px;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+        }
+        .btn-add:active { background: #1a6fc411; }
+
+        .export-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .export-card h3 { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #f0f4f0;
+            color: #1a4a1a;
+            border: 1px solid #c0d0c0;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 6px;
+            resize: none;
+        }
+        .btn-copy {
+            margin-top: 6px;
+            padding: 7px 16px;
+            background: #1a6fc415;
+            border: 1px solid #1a6fc455;
+            border-radius: 6px;
+            color: var(--accent);
+            font-size: 12px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-copy:active { background: #1a6fc430; }
+            border-radius: 6px;
+            color: var(--cyan);
+            font-size: 12px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-copy:active { background: #1a6fc430; }
+    </style>
+</head>
+<body>
+<div class="layout">
+
+    <div class="top-panel">
+        <h1>Редактор надписей</h1>
+        <div style="font-size:11px;color:#7a8099;margin-bottom:2px">Настройки сохраняются автоматически</div>
+        <a href="index.html" target="_blank"
+           style="display:inline-block;background:#1a6fc4;color:#fff;border-radius:8px;padding:5px 16px;font-size:12px;text-decoration:none;font-weight:bold;margin-bottom:2px">
+            ▶ Открыть часы
+        </a>
+        <div class="canvas-wrap">
+            <canvas id="cv"></canvas>
+        </div>
+    </div>
+
+    <!-- Кастомный пикер цветов -->
+    <div id="colorPickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;padding:16px">
+        <div style="background:#fff;border-radius:14px;padding:18px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+            <div style="font-size:14px;font-weight:bold;color:#1a1d2e;margin-bottom:12px">Выберите цвет</div>
+            <!-- Текущие цвета -->
+            <div style="font-size:11px;color:#7a8099;margin-bottom:6px">Цвета из проекта</div>
+            <div id="colorPickerSwatches" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+            <!-- Нативный пикер -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <label style="font-size:12px;color:#7a8099;white-space:nowrap">Свой цвет:</label>
+                <input type="color" id="colorPickerNative" style="width:44px;height:32px;border:none;background:none;cursor:pointer;padding:0">
+                <div id="colorPickerPreview" style="flex:1;height:32px;border-radius:6px;border:1px solid #d0d5de"></div>
+            </div>
+            <!-- Кнопки -->
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+                <button onclick="colorPickerCancel()" style="background:none;border:1px solid #d0d5de;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;color:#555">Отмена</button>
+                <button onclick="colorPickerConfirm()" style="background:#1a6fc4;border:none;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;color:#fff;font-weight:bold">Применить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-panel">
+        <!-- Настройки круговых стрелок -->
+        <div class="export-card" id="arcCard">
+            <h3 style="margin-bottom:8px">🔵 Круговые стрелки</h3>
+            <div id="arcControls"></div>
+        </div>
+        <div id="controls"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-add" onclick="addLabel()" style="flex:1;white-space:nowrap">+ Добавить надпись</button>
+            <button onclick="resetAll()" style="flex-shrink:0;background:none;border:1px dashed #cc4422;color:#cc4422;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;white-space:nowrap">↺ Сброс</button>
+        </div>
+        <div class="export-card">
+            <h3>Готовый код → вставить в uhrzeit.html</h3>
+            <textarea id="exportCode" readonly></textarea>
+            <button class="btn-copy" id="btnCopy" onclick="copyCode()">Скопировать</button>
+        </div>
+    </div>
+
+</div>
+<script>
+// Формат: lines — массив строк, каждая строка — массив слов {t, c}
+// Слова в строке идут горизонтально с разными цветами
+var DEFAULT_TEXTS = [
+    { textHour: 11.9, radius_k: 0.96, lines: [[{t:'... ', c:'#888888'}, {t:'Uhr ', c:'#aa2200'}]] },
+    { textHour:  1.2, radius_k: 1.00, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  2.2, radius_k: 1.08, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  3.0, radius_k: 1.04, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  3.8, radius_k: 1.10, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  4.7, radius_k: 1.08, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  5.9, radius_k: 0.93, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  7.2, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  8.1, radius_k: 1.04, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  9.0, radius_k: 1.01, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
+    { textHour:  9.9, radius_k: 1.06, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    { textHour: 10.9, radius_k: 0.98, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+];
+
+var STORAGE_KEY = 'uhrzeit_clock_texts_v4';
+var ARC_KEY     = 'uhrzeit_arc_settings_v2';
+
+var DEFAULT_ARC = {
+    lineWidth:   3,
+    arrowSize:   30,
+    radiusExtra: 18,
+    colorRight: '#FFC04C',
+    colorLeft:  '#FF8970',
+};
+
+function saveArc() {
+    try { localStorage.setItem(ARC_KEY, JSON.stringify(ARC)); } catch(e) {}
+}
+function loadArc() {
+    try {
+        var s = localStorage.getItem(ARC_KEY);
+        if (s) return JSON.parse(s);
+    } catch(e) {}
+    return null;
+}
+var ARC = loadArc() || JSON.parse(JSON.stringify(DEFAULT_ARC));
+
+function saveToStorage() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(CLOCK_TEXTS)); } catch(e) {}
+}
+function loadFromStorage() {
+    try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            var p = JSON.parse(saved);
+            if (p[0] && p[0].lines) return p;
+        }
+    } catch(e) {}
+    return null;
+}
+var CLOCK_TEXTS = loadFromStorage() || JSON.parse(JSON.stringify(DEFAULT_TEXTS));
+
+// ─── CANVAS ──────────────────────────────────────────────────────────────────
+var canvas = document.getElementById('cv');
+var ctx    = canvas.getContext('2d');
+var ORIG_W = 600, ORIG_H = 640;
+var bezelThickness = 12, padding = 40, arcPadding = 15;
+
+function sc() { return canvas.width / ORIG_W; }
+function resizeCanvas() {
+    var w = canvas.parentElement.clientWidth;
+    canvas.width  = w;
+    canvas.height = Math.round(w * ORIG_H / ORIG_W);
+    draw();
+}
+window.addEventListener('resize', resizeCanvas);
+
+function applyShadow(c,sc2,bl,ox,oy){c.shadowColor=sc2;c.shadowBlur=bl;c.shadowOffsetX=ox;c.shadowOffsetY=oy;}
+function clearShadow(c){c.shadowColor='transparent';c.shadowBlur=0;c.shadowOffsetX=0;c.shadowOffsetY=0;}
+function drawArrowhead(context,x,y,angle,color){
+    var size=ARC.arrowSize,la=20*Math.PI/180;
+    context.beginPath();context.moveTo(x,y);
+    context.lineTo(x-size*Math.cos(angle+la),y-size*Math.sin(angle+la));
+    context.lineTo(x-size*Math.cos(angle-la),y-size*Math.sin(angle-la));
+    context.closePath();context.fillStyle=color;context.fill();
+}
+function getAngles(sh,eh){return{startAngle:(sh-3)*Math.PI/6,endAngle:(eh-3)*Math.PI/6};}
+function drawArcsWithTriangles(context,xC,yC,radius,arcPad){
+    [{sh:12.05,eh:5,color:ARC.colorRight},{sh:7,eh:11.95,color:ARC.colorLeft}].forEach(function(a){
+        var ang=getAngles(a.sh,a.eh);
+        var adjR=radius+ARC.radiusExtra+bezelThickness;
+        context.beginPath();context.strokeStyle=a.color;
+        context.lineWidth=ARC.lineWidth;
+        context.arc(xC,yC,adjR,ang.startAngle,ang.endAngle);context.stroke();
+        var tx=xC+adjR*Math.cos(ang.endAngle),ty=yC+adjR*Math.sin(ang.endAngle);
+        drawArrowhead(context,tx,ty,Math.atan2(ty-yC,tx-xC)+Math.PI/2,a.color);
+    });
+}
+function drawSectors(context,xC,yC,radius){
+    [{sh:6,eh:7,c:'rgba(255,242,226,0.3)'},{sh:5,eh:6,c:'rgba(255,187,165,0.3)'},
+     {sh:7,eh:12,c:'rgba(255,187,165,0.3)'},{sh:12,eh:5,c:'rgba(255,242,226,0.3)'}
+    ].forEach(function(s){
+        var ang=getAngles(s.sh,s.eh);
+        context.beginPath();context.fillStyle=s.c;context.moveTo(xC,yC);
+        context.arc(xC,yC,radius,ang.startAngle,ang.endAngle);context.lineTo(xC,yC);context.fill();
+    });
+}
+function drawLinesFromCenter(context,xC,yC,radius){
+    context.strokeStyle='#000';context.lineWidth=1*sc();
+    [7,6,5,0].forEach(function(h){
+        var a=(h-3)*Math.PI/6;
+        context.beginPath();context.moveTo(xC,yC);
+        context.lineTo(xC+radius*Math.cos(a),yC+radius*Math.sin(a));context.stroke();
+    });
+}
+function drawColoredLine(words,cx,cy){
+    var totalW=0;
+    words.forEach(function(w){totalW+=ctx.measureText(w.t).width;});
+    var sx=cx-totalW/2;
+    words.forEach(function(w){
+        ctx.fillStyle=w.c;var ww=ctx.measureText(w.t).width;
+        ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=3;ctx.lineJoin='round';
+        ctx.strokeText(w.t,sx+ww/2,cy);
+        ctx.fillText(w.t,sx+ww/2,cy);sx+=ww;
+    });
+}
+function drawClockTexts(xC,yC,R){
+    var baseR=R+12+8,fs=Math.round(R*0.115),lineH=fs*1.3;
+    ctx.font='bold '+fs+'px Arial';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    clearShadow(ctx);
+    CLOCK_TEXTS.forEach(function(cfg){
+        var posAngle=(cfg.textHour-3)*Math.PI/6;
+        var r=baseR*cfg.radius_k;
+        var x=xC+r*Math.cos(posAngle),y=yC+r*Math.sin(posAngle);
+        var totalH=(cfg.lines.length-1)*lineH;
+        cfg.lines.forEach(function(line,i){drawColoredLine(line,x,y-totalH/2+i*lineH);});
+    });
+}
+function drawHand(context,angle,length,xC,yC,width,color){
+    context.beginPath();context.lineWidth=width*sc();context.strokeStyle=color;context.lineCap='round';
+    context.moveTo(xC,yC);
+    context.lineTo(xC+length*Math.cos(angle-Math.PI/2),yC+length*Math.sin(angle-Math.PI/2));
+    context.stroke();context.closePath();
+}
+
+function draw() {
+    var s=sc();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save();ctx.scale(s,s);
+    var R=(ORIG_W-2*padding)/2-50,xC=ORIG_W/2,yC=ORIG_H/2-20;
+    var radiusNum=R-padding-15;
+
+    drawArcsWithTriangles(ctx,xC,yC,R-padding,arcPadding);
+    drawSectors(ctx,xC,yC,R-padding);
+    drawLinesFromCenter(ctx,xC,yC,R-padding);
+    drawClockTexts(xC,yC,R);
+
+    // Деления
+    for(var tm=0;tm<60;tm++){
+        ctx.beginPath();
+        ctx.strokeStyle=tm%15===0?'#000':(tm%5===0?'#000':'#666');
+        ctx.fillStyle=tm%15===0?'#FFD700':'#ccc';
+        if(tm%15===0){applyShadow(ctx,'rgba(0,0,0,0.5)',3,2,2);}else{clearShadow(ctx);}
+        if(tm%15===0){
+            ctx.lineWidth=2;
+            var xPM=xC+radiusNum*Math.cos(-6*tm*Math.PI/180+Math.PI/2);
+            var yPM=yC-radiusNum*Math.sin(-6*tm*Math.PI/180+Math.PI/2);
+            ctx.arc(xPM,yPM,5,0,2*Math.PI,true);ctx.fill();ctx.stroke();
+        }else{
+            var ll=tm%5===0?10:6,off=ll===6?3:6;
+            var xS=xC+(radiusNum-off)*Math.cos(-6*tm*Math.PI/180+Math.PI/2);
+            var yS=yC-(radiusNum-off)*Math.sin(-6*tm*Math.PI/180+Math.PI/2);
+            var xE=xC+(radiusNum-off+ll)*Math.cos(-6*tm*Math.PI/180+Math.PI/2);
+            var yE=yC-(radiusNum-off+ll)*Math.sin(-6*tm*Math.PI/180+Math.PI/2);
+            ctx.lineWidth=tm%5===0?3.5:2.5;ctx.moveTo(xS,yS);ctx.lineTo(xE,yE);ctx.stroke();
+        }
+        ctx.closePath();
+    }
+    clearShadow(ctx);
+
+    // Цифры
+    for(var th=1;th<=12;th++){
+        ctx.font='bold 32px Tahoma';ctx.textAlign='center';ctx.fillStyle='#000';
+        var xT=xC+(radiusNum-30)*Math.cos(-30*th*Math.PI/180+Math.PI/2);
+        var yT=yC-(radiusNum-30)*Math.sin(-30*th*Math.PI/180+Math.PI/2);
+        ctx.fillText(th,xT,yT+10);
+    }
+
+    // Стрелки (10:10)
+    applyShadow(ctx,'rgba(0,0,0,0.5)',3,3,3);
+    drawHand(ctx,(10+10/60)*Math.PI/6,radiusNum/1.7,xC,yC,6,'#000');
+    drawHand(ctx,10*Math.PI/30,radiusNum-10,xC,yC,4,'#000');
+    clearShadow(ctx);
+
+    // Центральная точка
+    ctx.save();applyShadow(ctx,'rgba(0,0,0,0.5)',3,3,3);
+    ctx.beginPath();ctx.strokeStyle='#000';ctx.fillStyle='#CCC';ctx.lineWidth=3;
+    ctx.arc(xC,yC,6,0,2*Math.PI,true);ctx.stroke();ctx.fill();ctx.closePath();
+    ctx.restore();
+
+    // Безель
+    var bIn=R-padding,bOut=bIn+bezelThickness;
+    var bGrad=ctx.createRadialGradient(xC,yC,bIn,xC,yC,bOut);
+    bGrad.addColorStop(0,'#333');bGrad.addColorStop(0.2,'#707070');
+    bGrad.addColorStop(0.5,'#505050');bGrad.addColorStop(1,'#000');
+    ctx.save();applyShadow(ctx,'rgba(0,0,0,0.5)',5,4,4);
+    ctx.beginPath();ctx.arc(xC,yC,bOut-bezelThickness/2,0,2*Math.PI,true);
+    ctx.lineWidth=bezelThickness;ctx.strokeStyle=bGrad;ctx.stroke();ctx.closePath();
+    ctx.restore();
+    ctx.beginPath();ctx.arc(xC,yC,bIn,0,2*Math.PI,true);ctx.lineWidth=1;ctx.strokeStyle='#000';ctx.stroke();ctx.closePath();
+    ctx.beginPath();ctx.arc(xC,yC,bOut,0,2*Math.PI,true);ctx.lineWidth=1;ctx.strokeStyle='#000';ctx.stroke();ctx.closePath();
+
+    // Стекло + блики
+    var gGrad=ctx.createRadialGradient(xC,yC,R/3,xC,yC,R);
+    gGrad.addColorStop(0,'rgba(255,255,255,0.35)');gGrad.addColorStop(0.4,'rgba(200,200,200,0.2)');
+    gGrad.addColorStop(0.7,'rgba(50,50,50,0.1)');gGrad.addColorStop(1,'rgba(0,0,0,0.25)');
+    ctx.beginPath();ctx.arc(xC,yC,R-padding,0,2*Math.PI,true);ctx.fillStyle=gGrad;ctx.fill();ctx.closePath();
+    ctx.beginPath();
+    var hlG=ctx.createRadialGradient(xC-R/3,yC-R/3,0,xC-R/3,yC-R/3,R/4);
+    hlG.addColorStop(0,'rgba(255,255,255,0.9)');hlG.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=hlG;ctx.arc(xC-R/3,yC-R/3,R/4,0,2*Math.PI,true);ctx.fill();ctx.closePath();
+    ctx.beginPath();ctx.ellipse(xC+R/6,yC+R/4,R/5,R/12,Math.PI/4,0,2*Math.PI);
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fill();ctx.closePath();
+    ctx.beginPath();
+    var eG=ctx.createRadialGradient(xC,yC,R-padding-5,xC,yC,R-padding);
+    eG.addColorStop(0,'rgba(0,0,0,0)');eG.addColorStop(1,'rgba(0,0,0,0.2)');
+    ctx.arc(xC,yC,R-padding,0,2*Math.PI,true);ctx.fillStyle=eG;ctx.fill();ctx.closePath();
+    ctx.beginPath();ctx.arc(xC-R/4,yC-R/3,R/12,0,2*Math.PI,true);
+    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();ctx.closePath();
+    ctx.beginPath();ctx.ellipse(xC,yC+R/3,R/3,R/15,0,0,2*Math.PI);
+    ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fill();ctx.closePath();
+
+    ctx.restore();
+}
+
+// ─── CONTROLS ────────────────────────────────────────────────────────────────
+function buildControls() {
+    var c = document.getElementById('controls');
+    c.innerHTML = '';
+    CLOCK_TEXTS.forEach(function(cfg, idx) { c.appendChild(makeCard(cfg, idx)); });
+    updateExport();
+}
+
+function cardTitle(cfg) {
+    return cfg.lines.map(function(line){ return line.map(function(w){ return w.t; }).join(''); }).join(' | ');
+}
+
+function makeCard(cfg, idx) {
+    var card = document.createElement('div');
+    card.className = 'label-card'; card.id = 'card_' + idx;
+
+    var header = document.createElement('div');
+    header.className = 'card-header';
+    var title = document.createElement('span');
+    title.className = 'card-title';
+    title.style.color = cfg.lines[0] && cfg.lines[0][0] ? cfg.lines[0][0].c : '#fff';
+    title.textContent = cardTitle(cfg);
+    var btnDel = document.createElement('button');
+    btnDel.className = 'btn-delete'; btnDel.textContent = '✕';
+    btnDel.onclick = (function(i){ return function(){ deleteLabel(i); }; })(idx);
+    header.appendChild(title); header.appendChild(btnDel);
+    card.appendChild(header);
+
+    // Строки
+    var linesWrap = document.createElement('div');
+    linesWrap.id = 'lines_' + idx;
+    cfg.lines.forEach(function(line, li) {
+        linesWrap.appendChild(makeLineSection(idx, li));
+    });
+    card.appendChild(linesWrap);
+
+    // + строка
+    var btnAddLine = document.createElement('button');
+    btnAddLine.style.cssText = 'background:none;border:1px dashed #555;color:#888;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;margin-bottom:6px;width:100%';
+    btnAddLine.textContent = '+ строка';
+    btnAddLine.onclick = (function(i){ return function(){
+        CLOCK_TEXTS[i].lines.push([{t:'текст', c:'#333333'}]);
+        buildControls(); draw(); saveToStorage();
+    }; })(idx);
+    card.appendChild(btnAddLine);
+
+    card.appendChild(makeSlider(idx, 'textHour', 'Позиция', 0,   12,  0.1));
+    card.appendChild(makeSlider(idx, 'radius_k', 'Радиус',  0.7, 1.6, 0.01));
+    return card;
+}
+
+function makeLineSection(idx, li) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid #1e2235;border-radius:7px;padding:5px 7px;margin-bottom:5px';
+
+    var lineHeader = document.createElement('div');
+    lineHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:4px';
+    var lineLbl = document.createElement('span');
+    lineLbl.style.cssText = 'font-size:10px;color:#4a5070';
+    lineLbl.textContent = 'Строка ' + (li+1);
+
+    var lineActions = document.createElement('div');
+    lineActions.style.cssText = 'display:flex;gap:6px';
+
+    // + слово
+    var btnAddWord = document.createElement('button');
+    btnAddWord.style.cssText = 'background:none;border:none;color:#00e5ff88;font-size:11px;cursor:pointer;padding:0';
+    btnAddWord.textContent = '+ слово';
+    btnAddWord.onclick = (function(i,l){ return function(){
+        CLOCK_TEXTS[i].lines[l].push({t:'слово', c:'#333333'});
+        buildControls(); draw(); saveToStorage();
+    }; })(idx, li);
+
+    // удалить строку
+    var btnDelLine = document.createElement('button');
+    btnDelLine.style.cssText = 'background:none;border:none;color:#ff446688;font-size:11px;cursor:pointer;padding:0';
+    btnDelLine.textContent = '✕ строку';
+    btnDelLine.onclick = (function(i,l){ return function(){
+        if (CLOCK_TEXTS[i].lines.length <= 1) return;
+        CLOCK_TEXTS[i].lines.splice(l, 1);
+        buildControls(); draw(); saveToStorage();
+    }; })(idx, li);
+
+    lineActions.appendChild(btnAddWord);
+    lineActions.appendChild(btnDelLine);
+    lineHeader.appendChild(lineLbl);
+    lineHeader.appendChild(lineActions);
+    wrap.appendChild(lineHeader);
+
+    // Слова в строке
+    CLOCK_TEXTS[idx].lines[li].forEach(function(w, wi) {
+        wrap.appendChild(makeWordChip(idx, li, wi));
+    });
+    return wrap;
+}
+
+// ─── КАСТОМНЫЙ ПИКЕР ЦВЕТОВ ──────────────────────────────────────────────────
+var _pickerCallback = null;
+
+function getAllUsedColors() {
+    var set = {};
+    CLOCK_TEXTS.forEach(function(cfg) {
+        cfg.lines.forEach(function(line) {
+            line.forEach(function(w) { set[w.c.toLowerCase()] = true; });
+        });
+    });
+    // Цвета дуг
+    set[ARC.colorRight.toLowerCase()] = true;
+    set[ARC.colorLeft.toLowerCase()]   = true;
+    return Object.keys(set);
+}
+
+function openColorPicker(currentColor, callback) {
+    _pickerCallback = callback;
+    var overlay = document.getElementById('colorPickerOverlay');
+    var swatches = document.getElementById('colorPickerSwatches');
+    var nativeInp = document.getElementById('colorPickerNative');
+    var preview   = document.getElementById('colorPickerPreview');
+
+    nativeInp.value = currentColor;
+    preview.style.background = currentColor;
+
+    // Собираем цвета: текущие + из CLOCK_TEXTS
+    var used = getAllUsedColors();
+    // Добавляем текущий если его нет
+    if (used.indexOf(currentColor.toLowerCase()) === -1) used.unshift(currentColor.toLowerCase());
+
+    swatches.innerHTML = '';
+    used.forEach(function(c) {
+        var sw = document.createElement('div');
+        sw.style.cssText = 'width:36px;height:36px;border-radius:6px;cursor:pointer;border:2px solid ' +
+            (c === currentColor.toLowerCase() ? '#1a6fc4' : '#ccc') + ';background:' + c + ';flex-shrink:0';
+        sw.onclick = function() {
+            nativeInp.value = c;
+            preview.style.background = c;
+            document.querySelectorAll('#colorPickerSwatches div').forEach(function(s){
+                s.style.borderColor = '#ccc';
+            });
+            sw.style.borderColor = '#1a6fc4';
+        };
+        swatches.appendChild(sw);
+    });
+
+    nativeInp.oninput = function() {
+        preview.style.background = this.value;
+    };
+
+    overlay.style.display = 'flex';
+}
+
+function colorPickerConfirm() {
+    var c = document.getElementById('colorPickerNative').value;
+    document.getElementById('colorPickerOverlay').style.display = 'none';
+    if (_pickerCallback) { _pickerCallback(c); _pickerCallback = null; }
+}
+function colorPickerCancel() {
+    document.getElementById('colorPickerOverlay').style.display = 'none';
+    _pickerCallback = null;
+}
+
+function makeColorBtn(currentColor, onChange) {
+    var btn = document.createElement('div');
+    btn.style.cssText = 'width:28px;height:28px;border-radius:5px;border:1px solid #ccc;cursor:pointer;flex-shrink:0;background:' + currentColor;
+    btn.onclick = function() {
+        openColorPicker(currentColor, function(newColor) {
+            btn.style.background = newColor;
+            currentColor = newColor;
+            onChange(newColor);
+        });
+    };
+    return btn;
+}
+
+function makeWordChip(idx, li, wi) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:5px;align-items:center;margin-bottom:3px';
+
+    var inp = document.createElement('input');
+    inp.type = 'text'; inp.value = CLOCK_TEXTS[idx].lines[li][wi].t;
+    inp.style.cssText = 'flex:1;background:#f7f8fa;border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:monospace;font-size:12px;padding:2px 6px';
+    inp.oninput = (function(i,l,w){ return function(){
+        CLOCK_TEXTS[i].lines[l][w].t = this.value;
+        var t = document.querySelector('#card_'+i+' .card-title');
+        if (t) t.textContent = cardTitle(CLOCK_TEXTS[i]);
+        draw(); updateExport(); saveToStorage();
+    }; })(idx, li, wi);
+
+    var colorBtn = makeColorBtn(CLOCK_TEXTS[idx].lines[li][wi].c, (function(i,l,w){ return function(newColor) {
+        CLOCK_TEXTS[i].lines[l][w].c = newColor;
+        draw(); updateExport(); saveToStorage();
+    }; })(idx, li, wi));
+
+    var btnDel = document.createElement('button');
+    btnDel.textContent = '✕';
+    btnDel.style.cssText = 'background:none;border:none;color:#cc224488;font-size:11px;cursor:pointer;padding:0;flex-shrink:0';
+    btnDel.onclick = (function(i,l,w){ return function(){
+        if (CLOCK_TEXTS[i].lines[l].length <= 1) return;
+        CLOCK_TEXTS[i].lines[l].splice(w, 1);
+        buildControls(); draw(); saveToStorage();
+    }; })(idx, li, wi);
+
+    row.appendChild(inp); row.appendChild(colorBtn); row.appendChild(btnDel);
+    return row;
+}
+
+function makeSlider(idx, param, label, min, max, step) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    var valId = 'v_' + idx + '_' + param;
+    var lbl = document.createElement('label');
+    lbl.textContent = label;
+    var slider = document.createElement('input');
+    slider.type = 'range'; slider.min = min; slider.max = max; slider.step = step;
+    slider.value = CLOCK_TEXTS[idx][param];
+    slider.oninput = (function(i,p,vid){ return function(){
+        CLOCK_TEXTS[i][p] = +this.value;
+        document.getElementById(vid).textContent = this.value;
+        draw(); updateExport(); saveToStorage();
+    }; })(idx, param, valId);
+    var valEl = document.createElement('span');
+    valEl.className = 'val'; valEl.id = valId;
+    valEl.textContent = CLOCK_TEXTS[idx][param];
+    row.appendChild(lbl); row.appendChild(slider); row.appendChild(valEl);
+    return row;
+}
+
+function addLabel() {
+    CLOCK_TEXTS.push({ textHour: 12.0, radius_k: 1.00, lines: [ [{t:'neu', c:'#009966'}] ] });
+    buildControls();
+    setTimeout(function(){
+        var cards = document.querySelectorAll('#controls .label-card');
+        if (cards.length) cards[cards.length-1].scrollIntoView({behavior:'smooth'});
+    }, 50);
+    draw(); saveToStorage();
+}
+function deleteLabel(idx) {
+    CLOCK_TEXTS.splice(idx, 1);
+    buildControls(); draw(); saveToStorage();
+}
+function resetAll() {
+    if (!confirm('Сбросить все настройки к исходным?')) return;
+    CLOCK_TEXTS = JSON.parse(JSON.stringify(DEFAULT_TEXTS));
+    localStorage.removeItem(STORAGE_KEY);
+    buildControls(); draw();
+}
+
+// ─── EXPORT ──────────────────────────────────────────────────────────────────
+function updateExport() {
+    var out = CLOCK_TEXTS.map(function(cfg) {
+        var linesStr = cfg.lines.map(function(line){
+            var ws = line.map(function(w){ return "{t:'"+w.t+"', c:'"+w.c+"'}"; }).join(', ');
+            return '[' + ws + ']';
+        }).join(', ');
+        return "    { textHour: "+(+cfg.textHour).toFixed(1)+
+               ", radius_k: "+(+cfg.radius_k).toFixed(2)+
+               ", lines: ["+linesStr+"] },";
+    });
+    var arcStr = "var ARC_SETTINGS = " + JSON.stringify(ARC, null, 2) + ";";
+    document.getElementById('exportCode').value =
+        arcStr + '\n\nvar CLOCK_TEXTS = [\n'+out.join('\n')+'\n];';
+}
+function copyCode() {
+    var ta = document.getElementById('exportCode');
+    ta.select(); document.execCommand('copy');
+    var btn = document.getElementById('btnCopy');
+    btn.textContent = '✓ Скопировано!';
+    setTimeout(function(){ btn.textContent = 'Скопировать'; }, 2000);
+}
+
+function buildArcControls() {
+    var c = document.getElementById('arcControls');
+    c.innerHTML = '';
+
+    function addArcSlider(label, param, min, max, step) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var vid = 'arc_' + param;
+        var lbl = document.createElement('label'); lbl.textContent = label;
+        var sl  = document.createElement('input');
+        sl.type='range'; sl.min=min; sl.max=max; sl.step=step; sl.value=ARC[param];
+        sl.oninput = function() {
+            ARC[param] = +this.value;
+            document.getElementById(vid).textContent = this.value;
+            draw(); saveArc();
+        };
+        var val = document.createElement('span');
+        val.className='val'; val.id=vid; val.textContent=ARC[param];
+        row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
+        c.appendChild(row);
+    }
+
+    function addArcColor(label, param) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:5px';
+        var lbl = document.createElement('label');
+        lbl.textContent = label;
+        lbl.style.cssText = 'color:var(--muted);font-size:11px;width:68px;flex-shrink:0';
+        var btn = makeColorBtn(ARC[param], function(newColor) {
+            ARC[param] = newColor; draw(); saveArc();
+        });
+        row.appendChild(lbl); row.appendChild(btn);
+        c.appendChild(row);
+    }
+
+    addArcSlider('Толщина',   'lineWidth',    1, 8,  0.5);
+    addArcSlider('Размер →',  'arrowSize',    5, 40, 1);
+    addArcSlider('Отступ',    'radiusExtra',  0, 60, 1);
+    addArcColor('Цвет →',  'colorRight');
+    addArcColor('Цвет ←',  'colorLeft');
+
+    // Кнопка сброс дуг
+    var btnReset = document.createElement('button');
+    btnReset.textContent = '↺ Сброс дуг';
+    btnReset.style.cssText = 'background:none;border:1px dashed #aaa;color:#888;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-top:4px';
+    btnReset.onclick = function() {
+        ARC = JSON.parse(JSON.stringify(DEFAULT_ARC));
+        localStorage.removeItem(ARC_KEY);
+        buildArcControls(); draw();
+    };
+    c.appendChild(btnReset);
+}
+
+window.addEventListener('load', function(){ resizeCanvas(); buildArcControls(); buildControls(); });
+</script>
+</body>
+</html>

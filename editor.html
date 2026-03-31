@@ -356,10 +356,12 @@ function drawColoredLine(words,cx,cy){
     words.forEach(function(w){totalW+=ctx.measureText(w.t).width;});
     var sx=cx-totalW/2;
     words.forEach(function(w){
-        ctx.fillStyle=w.c;var ww=ctx.measureText(w.t).width;
+        var ww=ctx.measureText(w.t).width;
         ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=3;ctx.lineJoin='round';
-        ctx.strokeText(w.t,sx+ww/2,cy);
-        ctx.fillText(w.t,sx+ww/2,cy);sx+=ww;
+        ctx.strokeText(w.t,sx,cy);
+        ctx.fillStyle=w.c;
+        ctx.fillText(w.t,sx,cy);
+        sx+=ww;
     });
 }
 function drawClockTexts(xC, yC, R) {

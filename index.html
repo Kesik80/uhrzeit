@@ -395,22 +395,19 @@
     ];
     var CLOCK_TEXTS = loadFromStorage() || CLOCK_TEXTS_DEFAULT;
 
-    // Рисует строку слов с разными цветами — контур вместо blur-тени
+    // Рисует строку слов с разными цветами
     function drawColoredLine(context, words, cx, cy) {
         var totalW = 0;
         words.forEach(function(w) { totalW += context.measureText(w.t).width; });
         var startX = cx - totalW / 2;
         words.forEach(function(w) {
             var ww = context.measureText(w.t).width;
-            var tx = startX + ww / 2;
-            // Сначала контур (адаптируется к любому фону)
             context.strokeStyle = 'rgba(255,255,255,0.85)';
             context.lineWidth   = 3;
             context.lineJoin    = 'round';
-            context.strokeText(w.t, tx, cy);
-            // Затем заливка
+            context.strokeText(w.t, startX, cy);
             context.fillStyle = w.c;
-            context.fillText(w.t, tx, cy);
+            context.fillText(w.t, startX, cy);
             startX += ww;
         });
     }
@@ -425,7 +422,6 @@
         context.font         = `bold ${fs}px Arial`;
         context.textAlign    = 'left';
         context.textBaseline = 'middle';
-        // Без blur-тени — используем strokeText в drawColoredLine
         clearShadow(context);
 
         CLOCK_TEXTS.forEach(function(cfg) {

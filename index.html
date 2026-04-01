@@ -233,18 +233,23 @@
     }
 
     function showGermanTime() {
-        var h12   = hour % 12;
-        var mStep = Math.floor(minute / 5); // 0..11
+        var h12 = hour % 12;
+        var m   = minute;
         var textDe, textRu;
 
-        if (minute === 0) {
-            // Ровно: X Uhr
+        // Округляем к ближайшим 5 минутам для отображения
+        // Но сначала определяем точный шаг
+        var mStep = Math.round(m / 5); // 0..12
+        if (mStep === 12) mStep = 0;   // 58-59 мин → считаем как следующий час (0)
+
+        if (mStep === 0) {
+            // Ровно (или 1-2 мин): X Uhr
             textDe = 'Es ist ' + hoursDe[h12] + ' Uhr';
             var hf = hourForm(h12);
             textRu = 'Ровно ' + hoursRuNom[h12] + (hf ? ' ' + hf : '');
 
         } else if (mStep >= 1 && mStep <= 5) {
-            // 5–25 → «fünf/zehn/... nach ТЕКУЩЕГО»
+            // 5–25 → «X nach ТЕКУЩЕГО»
             textDe = 'Es ist ' + phrasesDe[mStep] + ' ' + hoursDe[h12];
             textRu = phrasesRu[mStep] + ' ' + hoursRuGen[h12];
 
@@ -261,15 +266,13 @@
             textRu = 'Тридцать пять минут ' + hoursRuGen[nextH7];
 
         } else {
-            // 40–55 → «... vor СЛЕДУЮЩЕГО» (без ...)
+            // 40–55 → «X vor СЛЕДУЮЩЕГО» (без ...)
             var nextH = (h12 + 1) % 12;
             textDe = 'Es ist ' + phrasesDe[mStep] + ' ' + hoursDe[nextH];
-            // Родительный падеж после «без»:
-            // nextH=0 → «двенадцати», nextH=1 → «часа» неверно → правильно «час» (для «без пяти час»)
             var ruHour;
-            if (nextH === 1) ruHour = 'часа';        // без пяти часа — разг. норма
+            if (nextH === 1)      ruHour = 'часа';
             else if (nextH === 0) ruHour = 'двенадцати';
-            else ruHour = hoursRuBez[nextH];
+            else                  ruHour = hoursRuBez[nextH];
             textRu = phrasesRu[mStep] + ' ' + ruHour;
         }
 

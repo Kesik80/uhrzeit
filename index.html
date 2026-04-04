@@ -243,8 +243,8 @@
     // ─── Настройки дуг — читаем из редактора или дефолт ───
     const ARC_DEFAULT = {
         lineWidth:   3,
-        arrowSize:   30,
-        radiusExtra: 18,
+        arrowSize:   25,
+        radiusExtra: 20,
         colorRight: '#FFC04C',
         colorLeft:  '#FF8970',
     };
@@ -515,29 +515,46 @@
     // Формат: lines — массив строк, каждая строка — массив {t, c}
     // Читаем из редактора (localStorage) или используем дефолт
     var CLOCK_TEXTS_DEFAULT = [
-        { textHour: 11.9, radius_k: 0.96, lines: [[{t:'... ', c:'#888888'}, {t:'Uhr ', c:'#aa2200'}]] },
-        { textHour:  1.2, radius_k: 1.00, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  2.2, radius_k: 1.08, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  3.0, radius_k: 1.04, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  3.8, radius_k: 1.10, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  4.7, radius_k: 1.08, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  5.9, radius_k: 0.93, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  7.2, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  8.1, radius_k: 1.04, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
-        { textHour:  9.0, radius_k: 1.01, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
-        { textHour:  9.9, radius_k: 1.06, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
-        { textHour: 10.9, radius_k: 0.98, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour: 11.9, radius_k: 1.00, lines: [[{t:'...', c:'#888888'}, {t:'Uhr', c:'#aa2200'}]] },
+        { textHour:  1.1, radius_k: 1.05, lines: [[{t:'5 ', c:'#333333'}, {t:'nach ', c:'#B85000'}, {t:'...', c:'#888888'}]] },
+        { textHour:  2.2, radius_k: 1.12, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  3.0, radius_k: 1.08, lines: [[{t:'Viertel ', c:'#333333'}], [{t:' nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  3.8, radius_k: 1.14, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  4.7, radius_k: 1.11, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055aa'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  5.9, radius_k: 1.00, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  7.1, radius_k: 1.05, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  8.1, radius_k: 1.09, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  9.0, radius_k: 1.07, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
+        { textHour: 10.0, radius_k: 1.11, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour: 10.9, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
     ];
     var CLOCK_TEXTS = loadFromStorage() || CLOCK_TEXTS_DEFAULT;
 
     // Рисует строку слов с разными цветами
+    // Адаптация цветов надписей для тёмной темы
+    var COLOR_MAP_DARK = {
+        '#333333': '#cccccc',  // числа: почти белые
+        '#888888': '#aaaaaa',  // многоточия: серые
+        '#aa2200': '#ff6644',  // Uhr: ярко-оранжевый
+        '#AA2200': '#ff6644',
+        '#B85000': '#ffaa44',  // nach: светло-оранжевый
+        '#b85000': '#ffaa44',
+        '#0055AA': '#66aaff',  // vor: голубой
+        '#0055aa': '#66aaff',
+    };
+
+    function adaptColor(col) {
+        if (!isDark) return col;
+        return COLOR_MAP_DARK[col] || col;
+    }
+
     function drawColoredLine(context, words, cx, cy) {
         var totalW = 0;
         words.forEach(function(w) { totalW += context.measureText(w.t).width; });
         var startX = cx - totalW / 2;
         words.forEach(function(w) {
             var ww = context.measureText(w.t).width;
-            context.fillStyle = w.c;
+            context.fillStyle = adaptColor(w.c);
             context.fillText(w.t, startX, cy);
             startX += ww;
         });
@@ -712,6 +729,15 @@
         ctx.beginPath();
         ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius, 0, 2 * Math.PI, true);
         ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+        // В тёмной теме — светлая обводка вокруг безеля для отделения от фона
+        if (isDark) {
+            ctx.beginPath();
+            ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius + 2, 0, 2 * Math.PI, true);
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.stroke();
+            ctx.closePath();
+        }
 
         // Стекло и блики — интенсивность зависит от темы
         var glowA = isDark ? 0.06 : 0.35;

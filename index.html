@@ -9,22 +9,39 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+        /* ── Тёмная тема ── */
         :root {
-            --bg:      #ffffff;
-            --text:    #111111;
-            --de:      #FF5733;
-            --ru:      #0000ff;
-            --hint:    #999999;
+            --bg:           #ffffff;
+            --text:         #000000;
+            --hint:         #999999;
+            --clock-de:     #FF5733;
+            --clock-ru:     blue;
+            --digital:      blue;
         }
-        :root.dark {
-            --bg:      #1a1a2e;
-            --text:    #e0e0e0;
-            --de:      #ff8060;
-            --ru:      #6699ff;
-            --hint:    #666688;
+        /* Тёмная тема — класс на <html> чтобы все дочерние элементы получили переменные */
+        html.dark {
+            --bg:           #1a1a1a;
+            --text:         #f0f0f0;
+            --hint:         #aaaaaa;
+            --clock-de:     #ff8c70;
+            --clock-ru:     #7aaaff;
+            --digital:      #7aaaff;
+        }
+        @media (prefers-color-scheme: dark) {
+            html:not(.light) {
+                --bg:           #1a1a1a;
+                --text:         #f0f0f0;
+                --hint:         #aaaaaa;
+                --clock-de:     #ff8c70;
+                --clock-ru:     #7aaaff;
+                --digital:      #7aaaff;
+                }
         }
 
         body {
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.3s, color 0.3s;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -32,68 +49,95 @@
             padding: 12px 10px 20px;
             gap: 8px;
             font-family: Tahoma, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            transition: background 0.3s, color 0.3s;
         }
 
-        h1 { font-size: clamp(16px, 5vw, 26px); font-weight: bold; text-align: center; }
+        h1 {
+            font-size: clamp(16px, 5vw, 26px);
+            font-weight: bold;
+            text-align: center;
+            color: var(--text);
+        }
 
         #digitalClock {
             font-size: clamp(22px, 7vw, 40px);
-            font-weight: bold; color: var(--ru);
-            text-align: center; font-family: Tahoma, sans-serif; letter-spacing: 0.05em;
+            font-weight: bold;
+            color: var(--digital);
+            text-align: center;
+            font-family: Tahoma, sans-serif;
+            letter-spacing: 0.05em;
         }
 
-        #clockWrap {
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
         #clock {
             font-size: clamp(16px, 5vw, 24px);
-            color: var(--de); font-weight: bold; cursor: pointer;
+            color: var(--clock-de);
+            text-align: center;
+            font-weight: bold;
         }
-        #clock:active { opacity: 0.7; }
-        #speakBtn {
-            font-size: 1.3em; background: none; border: none;
-            cursor: pointer; padding: 2px; line-height: 1;
-            transition: transform 0.15s;
-        }
-        #speakBtn.speaking { transform: scale(1.4); }
 
-        #clock-ru { font-size: clamp(14px, 4.2vw, 20px); color: var(--ru); text-align: center; }
+        #clock-ru {
+            font-size: clamp(14px, 4.2vw, 20px);
+            color: var(--clock-ru);
+            text-align: center;
+        }
 
         .canvas-wrap {
-            width: 100%; max-width: 520px; position: relative; overflow: hidden;
+            width: 100%;
+            max-width: 520px;
+            position: relative;
+            overflow: hidden;
         }
-        canvas { display: block; touch-action: none; }
 
-        .hint { font-size: clamp(10px, 3vw, 13px); color: var(--hint); text-align: center; }
+        canvas {
+            display: block;
+            touch-action: none;
+            /* размеры только через JS, без CSS aspect-ratio */
+        }
 
+        .hint {
+            font-size: clamp(10px, 3vw, 13px);
+            color: var(--hint);
+            text-align: center;
+        }
         #btnTheme {
-            position: fixed; top: 10px; right: 12px; z-index: 200;
-            width: 38px; height: 38px; border-radius: 50%; border: none;
-            background: #f0f0f0; font-size: 20px; cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            display: flex; align-items: center; justify-content: center;
+            position: fixed;
+            top: 10px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            z-index: 200;
+            line-height: 1;
+            opacity: 0.7;
+            padding: 4px;
         }
-        :root.dark #btnTheme { background: #2a2a4a; }
+        #btnTheme:active { opacity: 1; }
 
+        /* ── Игровой режим ── */
         .game-btn {
-            padding: 10px 28px; font-size: clamp(14px, 4vw, 18px);
-            font-weight: bold; border: none; border-radius: 10px;
-            cursor: pointer; transition: background 0.2s;
+            padding: 10px 28px;
+            font-size: clamp(14px, 4vw, 18px);
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
         }
-        #btnStart { background: #2ecc71; color: #fff; }
+        #btnStart {
+            background: #2ecc71;
+            color: #fff;
+        }
         #btnStart:active { background: #27ae60; }
-        #btnStop  { background: #e74c3c; color: #fff; }
-        #btnStop:active  { background: #c0392b; }
+        #btnStop {
+            background: #e74c3c;
+            color: #fff;
+        }
+        #btnStop:active { background: #c0392b; }
 
 
     </style>
 </head>
 <body>
-
-    <button id="btnTheme" onclick="toggleTheme()">🌙</button>
 
     <!-- Оверлей таймер — поверх всего, не влияет на layout -->
     <div id="gamePhaseWrap" style="display:none;position:fixed;top:0;left:0;width:100%;z-index:100;
@@ -108,11 +152,14 @@
         </svg>
     </div>
 
+    <button id="btnTheme" onclick="toggleTheme()" title="Сменить тему">🌙</button>
     <h1>Wie spät ist es?</h1>
     <div id="digitalClock">00:00:00</div>
-    <div id="clockWrap">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px">
         <div id="clock"> </div>
-        <button id="speakBtn" onclick="speakTime()" title="Произнести">🔊</button>
+        <button id="btnSpeak" onclick="speakTime()" title="Произнести" style="
+            background:none;border:none;cursor:pointer;font-size:clamp(18px,5vw,24px);
+            padding:2px 4px;opacity:0.7;line-height:1;display:none">🔊</button>
     </div>
     <div id="clock-ru"> </div>
     <div class="canvas-wrap">
@@ -123,7 +170,36 @@
         <button class="game-btn" id="btnStart" onclick="startGame()" style="position:absolute;inset:0;width:100%">▶ Играть</button>
         <button class="game-btn" id="btnStop"  onclick="stopGame()" style="position:absolute;inset:0;width:100%;visibility:hidden">■ Стоп</button>
     </div>
-    <a href="editor.html" style="font-size:11px;color:#999;text-decoration:none;margin-top:4px">⚙ Редактор надписей</a>
+
+    <!-- Настройки под кнопками — всегда в потоке, visibility переключается -->
+    <div id="gameSettings" style="display:none;flex-direction:column;align-items:center;gap:8px;margin-top:2px">
+        <!-- Выбор времени таймера -->
+        <div style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint)">
+            ⏱
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="timerDur" value="15" style="accent-color:#2ecc71"> 15с
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="timerDur" value="10" style="accent-color:#2ecc71"> 10с
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="timerDur" value="5" checked style="accent-color:#2ecc71"> 5с
+            </label>
+        </div>
+        <!-- Авто-звук в игровом режиме -->
+        <label style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none">
+            <input type="checkbox" id="chkAutoSpeak" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71">
+            🔊 Авто-звук (игра)
+        </label>
+    </div>
+
+    <!-- Авто-звук в обычном режиме — всегда виден -->
+    <label id="normalSpeakWrap" style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none;margin-top:2px">
+        <input type="checkbox" id="chkNormalSpeak" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71">
+        🔊 Авто-звук
+    </label>
+
+    <a href="editor.html" id="editorLink" style="font-size:11px;color:#999;text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
 
 <script>
     var hour   = 0;
@@ -162,7 +238,6 @@
     // -------------- Отступы -------------------------
     const bezelThickness = 12;
     const padding        = 40;
-    const textOffset     = 45;
     // -------------------------------------------------
 
     // ─── Настройки дуг — читаем из редактора или дефолт ───
@@ -331,15 +406,19 @@
 
         document.getElementById('clock').textContent    = textDe;
         document.getElementById('clock-ru').textContent = textRu;
+        // Авто-звук в обычном режиме — только при смене минуты
+        if (!isGameMode && !isStoppingGame) {
+            var chkNorm = document.getElementById('chkNormalSpeak');
+            if (chkNorm && chkNorm.checked && speechSupported) {
+                if (minute !== lastSpokenMinute) {
+                    lastSpokenMinute = minute;
+                    setTimeout(speakTime, 200);
+                }
+            }
+        }
     }
 
     // ─── ОРИГИНАЛЬНЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (тени) ─────────────────────────
-    function applyShadow(context, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY) {
-        context.shadowColor   = shadowColor;
-        context.shadowBlur    = shadowBlur;
-        context.shadowOffsetX = shadowOffsetX;
-        context.shadowOffsetY = shadowOffsetY;
-    }
     function clearShadow(context) {
         context.shadowColor   = 'transparent';
         context.shadowBlur    = 0;
@@ -458,10 +537,6 @@
         var startX = cx - totalW / 2;
         words.forEach(function(w) {
             var ww = context.measureText(w.t).width;
-            context.strokeStyle = 'rgba(255,255,255,0.85)';
-            context.lineWidth   = 3;
-            context.lineJoin    = 'round';
-            context.strokeText(w.t, startX, cy);
             context.fillStyle = w.c;
             context.fillText(w.t, startX, cy);
             startX += ww;
@@ -506,6 +581,198 @@
         context.closePath();
     }
 
+    function displayCanvas() {
+        const s = scale();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.scale(s, s);
+
+        // ── Белый фон циферблата (всегда светлый, не зависит от темы страницы) ──
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI);
+        ctx.fillStyle = '#f5f0e8';
+        ctx.fill();
+        ctx.closePath();
+
+        // В тёмной теме — мягкое свечение вокруг циферблата
+        if (isDark) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,255,255,0.25)';
+            ctx.shadowBlur  = 30 * s;
+            ctx.beginPath();
+            ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(255,255,255,0.0)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        if (!isGameMode) {
+            drawArcsWithTriangles(ctx, clockCenterX, clockCenterY, clockRadius - padding, 0);
+            drawSectors(ctx, clockCenterX, clockCenterY, clockRadius - padding);
+            drawLinesFromCenter(ctx, clockCenterX, clockCenterY, clockRadius - padding);
+            drawText(ctx, clockCenterX, clockCenterY, clockRadius, padding);
+        }
+
+        // Деления
+        for (var tm = 0; tm < 60; tm++) {
+            ctx.beginPath();
+            ctx.strokeStyle = tm % 15 === 0 ? '#000000' : (tm % 5 === 0 ? '#000000' : '#666666');
+            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : '#cccccc';
+            if (tm % 15 === 0) {
+                ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+            } else {
+                ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+            }
+            if (tm % 15 === 0) {
+                ctx.lineWidth = 2;
+                var rp  = 5;
+                var xPM = clockCenterX + numbersRadius * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yPM = clockCenterY - numbersRadius * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                ctx.arc(xPM, yPM, rp, 0, 2 * Math.PI, true);
+                ctx.fill(); ctx.stroke();
+            } else {
+                var lineLength = tm % 5 === 0 ? 10 : 6;
+                var offset     = lineLength === 6 ? 3 : 6;
+                var xStart = clockCenterX + (numbersRadius - offset) * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yStart = clockCenterY - (numbersRadius - offset) * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var xEnd   = clockCenterX + (numbersRadius - offset + lineLength) * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yEnd   = clockCenterY - (numbersRadius - offset + lineLength) * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                ctx.lineWidth = tm % 5 === 0 ? 3.5 : 2.5;
+                ctx.moveTo(xStart, yStart);
+                ctx.lineTo(xEnd, yEnd);
+                ctx.stroke();
+            }
+            ctx.closePath();
+        }
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        // Цифры
+        for (var th = 1; th <= 12; th++) {
+            ctx.beginPath();
+            ctx.font         = 'bold 32px Tahoma';
+            ctx.textAlign    = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle    = '#111111'; // цифры всегда тёмные — фон циферблата белый
+            var xT = clockCenterX + (numbersRadius - 30) * Math.cos(-30 * th * (Math.PI / 180) + Math.PI / 2);
+            var yT = clockCenterY - (numbersRadius - 30) * Math.sin(-30 * th * (Math.PI / 180) + Math.PI / 2);
+            ctx.fillText(th, xT, yT);
+            ctx.closePath();
+        }
+
+        // Тень для стрелок
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+        var handColor = '#000000';
+        drawHand(ctx, (hour % 12 + minute / 60) * (Math.PI / 6), numbersRadius / 1.4, clockCenterX, clockCenterY, 6, handColor);
+        drawHand(ctx, minute * (Math.PI / 30), numbersRadius - 10, clockCenterX, clockCenterY, 4, handColor);
+        if (!isClockPaused) {
+            drawHand(ctx, second * (Math.PI / 30), numbersRadius - 20, clockCenterX, clockCenterY, 2, 'red');
+        }
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        // Центральная точка
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.strokeStyle = '#000000'; ctx.fillStyle = '#CCCCCC'; ctx.lineWidth = 3;
+        ctx.arc(clockCenterX, clockCenterY, 6, 0, 2 * Math.PI, true);
+        ctx.stroke(); ctx.fill(); ctx.closePath();
+        ctx.restore();
+
+        // Безель
+        const bezelInnerRadius = clockRadius - padding;
+        const bezelOuterRadius = bezelInnerRadius + bezelThickness;
+        var bezelGradient = ctx.createRadialGradient(
+            clockCenterX, clockCenterY, bezelInnerRadius,
+            clockCenterX, clockCenterY, bezelOuterRadius
+        );
+        bezelGradient.addColorStop(0,   '#333333');
+        bezelGradient.addColorStop(0.2, '#707070');
+        bezelGradient.addColorStop(0.5, '#505050');
+        bezelGradient.addColorStop(1,   '#000000');
+        ctx.save();
+        ctx.shadowBlur = 5; ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 4;
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius - bezelThickness / 2, 0, 2 * Math.PI, true);
+        ctx.lineWidth   = bezelThickness;
+        ctx.strokeStyle = bezelGradient;
+        ctx.stroke(); ctx.closePath();
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, bezelInnerRadius, 0, 2 * Math.PI, true);
+        ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius, 0, 2 * Math.PI, true);
+        ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+
+        // Стекло и блики — интенсивность зависит от темы
+        var glowA = isDark ? 0.06 : 0.35;
+        var hlA   = isDark ? 0.12 : 0.9;
+        var hl2A  = isDark ? 0.06 : 0.3;
+        var hl3A  = isDark ? 0.08 : 0.5;
+        var hl4A  = isDark ? 0.04 : 0.15;
+
+        var glassGradient = ctx.createRadialGradient(
+            clockCenterX, clockCenterY, clockRadius / 3,
+            clockCenterX, clockCenterY, clockRadius
+        );
+        glassGradient.addColorStop(0,   'rgba(255,255,255,' + glowA + ')');
+        glassGradient.addColorStop(0.4, 'rgba(200,200,200,' + (glowA * 0.57) + ')');
+        glassGradient.addColorStop(0.7, 'rgba(50,50,50,0.1)');
+        glassGradient.addColorStop(1,   'rgba(0,0,0,0.25)');
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI, true);
+        ctx.fillStyle = glassGradient; ctx.fill(); ctx.closePath();
+
+        // Блик главный
+        ctx.beginPath();
+        var hlGrad = ctx.createRadialGradient(
+            clockCenterX - clockRadius / 3, clockCenterY - clockRadius / 3, 0,
+            clockCenterX - clockRadius / 3, clockCenterY - clockRadius / 3, clockRadius / 4
+        );
+        hlGrad.addColorStop(0, 'rgba(255,255,255,' + hlA + ')');
+        hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = hlGrad;
+        ctx.arc(clockCenterX - clockRadius / 3, clockCenterY - clockRadius / 3, clockRadius / 4, 0, 2 * Math.PI, true);
+        ctx.fill(); ctx.closePath();
+
+        // Вторичный блик
+        ctx.beginPath();
+        ctx.ellipse(clockCenterX + clockRadius / 6, clockCenterY + clockRadius / 4,
+                    clockRadius / 5, clockRadius / 12, Math.PI / 4, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,255,255,' + hl2A + ')'; ctx.fill(); ctx.closePath();
+
+        // Тень по краям стекла
+        ctx.beginPath();
+        var edgeGrad = ctx.createRadialGradient(
+            clockCenterX, clockCenterY, clockRadius - padding - 5,
+            clockCenterX, clockCenterY, clockRadius - padding
+        );
+        edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        edgeGrad.addColorStop(1, 'rgba(0,0,0,0.2)');
+        ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI, true);
+        ctx.fillStyle = edgeGrad; ctx.fill(); ctx.closePath();
+
+        // Маленький верхний блик
+        ctx.beginPath();
+        ctx.arc(clockCenterX - clockRadius / 4, clockCenterY - clockRadius / 3, clockRadius / 12, 0, 2 * Math.PI, true);
+        ctx.fillStyle = 'rgba(255,255,255,' + hl3A + ')'; ctx.fill(); ctx.closePath();
+
+        // Нижний блик
+        ctx.beginPath();
+        ctx.ellipse(clockCenterX, clockCenterY + clockRadius / 3, clockRadius / 3, clockRadius / 15, 0, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,255,255,' + hl4A + ')'; ctx.fill(); ctx.closePath();
+
+        ctx.restore(); // снимаем scale(s, s)
+    }
 
     // ─── TOUCH / CLICK ───────────────────────────────────────────────────────
     function isTouchDevice() {
@@ -557,10 +824,10 @@
 
     // ─── ИГРОВОЙ РЕЖИМ ────────────────────────────────────────────────────────
     var gameInterval  = null;  // интервал таймера
-    var gameTimeout   = null;  // таймаут фаз
     var gameCountdown = 0;     // секунды до конца фазы
-    var gamePhaseNum  = 0;     // 0=вопрос, 1=ответ
     var isGameMode    = false;
+    var isStoppingGame  = false; // подавляет авто-звук при выходе из игры
+    var lastSpokenMinute = -1;  // последняя озвученная минута (обычный режим)
 
     // ─── SVG ТАЙМЕР ──────────────────────────────────────────────────────────
     var CIRCUMFERENCE = 2 * Math.PI * 30; // 188.5
@@ -575,12 +842,11 @@
         document.getElementById('timerNum').style.fill   = color;
     }
 
-    function setTimerColor(color) { /* не используется */ }
-
     // Скрываем/показываем элементы нормального режима
     function setGameUI(active) {
         isGameMode = active;
         document.getElementById('clock').style.visibility    = active ? 'hidden' : 'visible';
+        document.getElementById('btnSpeak').style.visibility  = active ? 'hidden' : 'visible';
         document.getElementById('clock-ru').style.visibility = active ? 'hidden' : 'visible';
         document.getElementById('hintText').style.visibility  = active ? 'hidden' : 'visible';
         document.getElementById('btnStart').style.visibility  = active ? 'hidden' : 'visible';
@@ -591,6 +857,9 @@
             var r  = dc.getBoundingClientRect();
             document.getElementById('gamePhaseWrap').style.paddingTop = (r.bottom + 6) + 'px';
         }
+        document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
+        document.getElementById('gameSettings').style.display      = active ? 'flex' : 'none';
+        document.getElementById('normalSpeakWrap').style.display   = active ? 'none' : 'flex';
         // Скрываем/показываем надписи и дуги на циферблате через флаг
         displayCanvas();
     }
@@ -610,16 +879,20 @@
 
     function stopGame() {
         clearInterval(gameInterval);
-        clearTimeout(gameTimeout);
+        clearTimeout(gameInterval);
         gameInterval = null;
+        window.speechSynthesis && window.speechSynthesis.cancel(); // останавливаем речь
+        isStoppingGame = true;  // запрещаем авто-звук при восстановлении
         setGameUI(false);
         // Восстанавливаем реальное время
         var d = new Date();
         hour = d.getHours(); minute = d.getMinutes(); second = d.getSeconds();
         displayCanvas();
         showGermanTime();
-        updateDigitalClock(); // восстанавливаем реальное время на электронных часах
+        updateDigitalClock();
         startClock();
+        isStoppingGame    = false; // снова разрешаем авто-звук
+        lastSpokenMinute = -1;  // сбрасываем чтобы следующая смена минуты сработала
     }
 
     function runQuestion() {
@@ -640,12 +913,13 @@
         displayCanvas();
         updateGameDigitalClock();
 
-        gameCountdown = 5;
-        setTimerArc(gameCountdown, 5);
+        var dur = parseInt((document.querySelector('input[name="timerDur"]:checked') || {value:'5'}).value);
+        gameCountdown = dur;
+        setTimerArc(gameCountdown, dur);
         clearInterval(gameInterval);
         gameInterval = setInterval(function() {
             gameCountdown--;
-            setTimerArc(gameCountdown, 5);
+            setTimerArc(gameCountdown, dur);
             if (gameCountdown <= 0) {
                 clearInterval(gameInterval);
                 runAnswer();
@@ -660,184 +934,72 @@
         // скрываем таймер во время показа ответа
         document.getElementById('gamePhaseWrap').style.display = 'none';
         clearInterval(gameInterval);
+        // Авто-звук если чекбокс включён — небольшая задержка чтобы текст успел появиться
+        var autoSpeak = document.getElementById('chkAutoSpeak');
+        if (autoSpeak && autoSpeak.checked) {
+            setTimeout(speakTime, 400);
+        }
         gameInterval = setTimeout(function() {
             runQuestion();
         }, 3000);
     }
 
-    // ─── ОЗВУЧКА ─────────────────────────────────────────────────────────────
+
+    // ── 🔊 Произношение времени (Web Speech API) ────────────────────────────
+    var speechSupported = ('speechSynthesis' in window);
+
     function speakTime() {
-        var text = (document.getElementById('clock').textContent || '').trim();
-        if (!text || !window.speechSynthesis) return;
+        if (!speechSupported) return;
+        var text = document.getElementById('clock').textContent;
+        if (!text || text.trim() === '') return;
         window.speechSynthesis.cancel();
         var utt = new SpeechSynthesisUtterance(text);
-        utt.lang = 'de-DE'; utt.rate = 0.85;
-        var btn = document.getElementById('speakBtn');
-        btn.classList.add('speaking');
-        utt.onend = utt.onerror = function() { btn.classList.remove('speaking'); };
+        utt.lang = 'de-DE';
+        utt.rate = 0.9;
+        // Пробуем найти немецкий голос
+        var voices = window.speechSynthesis.getVoices();
+        var deVoice = voices.find(function(v) { return v.lang.startsWith('de'); });
+        if (deVoice) utt.voice = deVoice;
         window.speechSynthesis.speak(utt);
     }
 
-    // ─── ТЁМНАЯ ТЕМА ─────────────────────────────────────────────────────────
+    // Показываем кнопку только если Speech API доступен
+
+    // ── Тема ──────────────────────────────────────────────────────────────────
+    var isDark = false;
+
     function applyTheme(dark) {
-        document.documentElement.classList.toggle('dark', dark);
+        isDark = dark;
+        document.documentElement.classList.toggle('dark',  dark);
+        document.documentElement.classList.toggle('light', !dark);
         document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
+        localStorage.setItem('uhrzeit_theme', dark ? 'dark' : 'light');
         displayCanvas();
     }
+
     function toggleTheme() {
-        var dark = !document.documentElement.classList.contains('dark');
-        localStorage.setItem('uhrzeit_theme', dark ? 'dark' : 'light');
-        applyTheme(dark);
+        applyTheme(!isDark);
     }
-    function loadTheme() {
+
+    // Инициализация темы — вызывается из load
+
+    window.addEventListener('load', function() {
+        // Тема
         var saved = localStorage.getItem('uhrzeit_theme');
-        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        applyTheme(dark);
-    }
-
-    // ─── АНИМАЦИЯ СТРЕЛОК ────────────────────────────────────────────────────
-    // Плавное движение стрелок: храним «визуальные» углы отдельно
-    var _dispH = 0, _dispM = 0, _dispS = 0;
-    var _rafId = null;
-
-    function _targetH() { return (hour % 12 + minute / 60) * Math.PI / 6; }
-    function _targetM() { return minute * Math.PI / 30; }
-    function _targetS() { return second * Math.PI / 30; }
-
-    function _shortDiff(from, to) {
-        return ((to - from + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    }
-
-    var _lastT = 0;
-    function _rafLoop(ts) {
-        var dt = Math.min((ts - _lastT) / 1000, 0.1);
-        _lastT = ts;
-        var spd = isClockPaused ? 10 : 6;
-        _dispH += _shortDiff(_dispH, _targetH()) * Math.min(spd * dt, 1);
-        _dispM += _shortDiff(_dispM, _targetM()) * Math.min(spd * dt, 1);
-        _dispS += _shortDiff(_dispS, _targetS()) * Math.min(spd * dt, 1);
-        _drawFrame();
-        _rafId = requestAnimationFrame(_rafLoop);
-    }
-
-    // Цвета циферблата с учётом темы
-    function _isDark() { return document.documentElement.classList.contains('dark'); }
-
-    function _drawFrame() {
-        var s = scale();
-        var dark = _isDark();
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.scale(s, s);
-
-        // Фон циферблата
-        var face = ctx.createRadialGradient(
-            clockCenterX - clockRadius*0.2, clockCenterY - clockRadius*0.2, clockRadius*0.1,
-            clockCenterX, clockCenterY, clockRadius
-        );
-        face.addColorStop(0, dark ? '#2a2a3e' : '#f5f0e8');
-        face.addColorStop(1, dark ? '#1a1a2e' : '#d0c8ba');
-        ctx.beginPath(); ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2*Math.PI);
-        ctx.fillStyle = face; ctx.fill();
-
-        if (!isGameMode) {
-            drawArcsWithTriangles(ctx, clockCenterX, clockCenterY, clockRadius - padding, 0);
-            drawSectors(ctx, clockCenterX, clockCenterY, clockRadius - padding);
-            drawLinesFromCenter(ctx, clockCenterX, clockCenterY, clockRadius - padding);
-            drawText(ctx, clockCenterX, clockCenterY, clockRadius, padding);
+        if (saved) {
+            applyTheme(saved === 'dark');
+        } else {
+            applyTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
         }
-
-        // Деления
-        var numC = dark ? '#cccccc' : '#000000';
-        for (var tm = 0; tm < 60; tm++) {
-            ctx.beginPath();
-            ctx.strokeStyle = tm%15===0 ? numC : (tm%5===0 ? numC : (dark?'#555577':'#666666'));
-            ctx.fillStyle   = tm%15===0 ? '#FFD700' : (dark?'#444466':'#cccccc');
-            if (tm%15===0) { applyShadow(ctx,'rgba(0,0,0,0.5)',3,2,2); } else { clearShadow(ctx); }
-            if (tm%15===0) {
-                ctx.lineWidth = 2;
-                var xPM = clockCenterX + numbersRadius * Math.cos(-6*tm*Math.PI/180 + Math.PI/2);
-                var yPM = clockCenterY - numbersRadius * Math.sin(-6*tm*Math.PI/180 + Math.PI/2);
-                ctx.arc(xPM, yPM, 5, 0, 2*Math.PI, true); ctx.fill(); ctx.stroke();
-            } else {
-                var ll = tm%5===0?10:6, off = ll===6?3:6;
-                var xS = clockCenterX+(numbersRadius-off)*Math.cos(-6*tm*Math.PI/180+Math.PI/2);
-                var yS = clockCenterY-(numbersRadius-off)*Math.sin(-6*tm*Math.PI/180+Math.PI/2);
-                var xE = clockCenterX+(numbersRadius-off+ll)*Math.cos(-6*tm*Math.PI/180+Math.PI/2);
-                var yE = clockCenterY-(numbersRadius-off+ll)*Math.sin(-6*tm*Math.PI/180+Math.PI/2);
-                ctx.lineWidth = tm%5===0?3.5:2.5; ctx.moveTo(xS,yS); ctx.lineTo(xE,yE); ctx.stroke();
-            }
-            ctx.closePath();
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                if (!localStorage.getItem('uhrzeit_theme')) applyTheme(e.matches);
+            });
         }
-        clearShadow(ctx);
-
-        // Цифры
-        for (var th = 1; th <= 12; th++) {
-            ctx.font='bold 32px Tahoma'; ctx.textAlign='center'; ctx.textBaseline='middle';
-            ctx.fillStyle = numC;
-            var xT = clockCenterX+(numbersRadius-30)*Math.cos(-30*th*Math.PI/180+Math.PI/2);
-            var yT = clockCenterY-(numbersRadius-30)*Math.sin(-30*th*Math.PI/180+Math.PI/2);
-            ctx.fillText(th, xT, yT);
+        if (speechSupported) {
+            document.getElementById('btnSpeak').style.display = 'inline-block';
         }
-
-        // Стрелки (анимированные)
-        var hc = dark ? '#dddddd' : '#000000';
-        applyShadow(ctx,'rgba(0,0,0,0.5)',3,3,3);
-        drawHand(ctx, _dispH, numbersRadius/1.4, clockCenterX, clockCenterY, 6, hc);
-        drawHand(ctx, _dispM, numbersRadius-10,  clockCenterX, clockCenterY, 4, hc);
-        if (!isClockPaused) drawHand(ctx, _dispS, numbersRadius-20, clockCenterX, clockCenterY, 2, 'red');
-        clearShadow(ctx);
-
-        // Центральная точка
-        ctx.save(); applyShadow(ctx,'rgba(0,0,0,0.5)',3,3,3);
-        ctx.beginPath(); ctx.strokeStyle='#000'; ctx.fillStyle='#CCC'; ctx.lineWidth=3;
-        ctx.arc(clockCenterX, clockCenterY, 6, 0, 2*Math.PI, true); ctx.stroke(); ctx.fill(); ctx.closePath();
-        ctx.restore();
-
-        // Безель
-        var bIn = clockRadius-padding, bOut = bIn+bezelThickness;
-        var bGrad = ctx.createRadialGradient(clockCenterX,clockCenterY,bIn,clockCenterX,clockCenterY,bOut);
-        bGrad.addColorStop(0,'#333'); bGrad.addColorStop(0.2,'#707070');
-        bGrad.addColorStop(0.5,'#505050'); bGrad.addColorStop(1,'#000');
-        ctx.save(); applyShadow(ctx,'rgba(0,0,0,0.5)',5,4,4);
-        ctx.beginPath(); ctx.arc(clockCenterX,clockCenterY,bOut-bezelThickness/2,0,2*Math.PI,true);
-        ctx.lineWidth=bezelThickness; ctx.strokeStyle=bGrad; ctx.stroke(); ctx.closePath(); ctx.restore();
-        ctx.beginPath(); ctx.arc(clockCenterX,clockCenterY,bIn,0,2*Math.PI,true);
-        ctx.lineWidth=1; ctx.strokeStyle='#000'; ctx.stroke(); ctx.closePath();
-        ctx.beginPath(); ctx.arc(clockCenterX,clockCenterY,bOut,0,2*Math.PI,true);
-        ctx.lineWidth=1; ctx.strokeStyle='#000'; ctx.stroke(); ctx.closePath();
-
-        // Стекло
-        var gGrad = ctx.createRadialGradient(clockCenterX,clockCenterY,clockRadius/3,clockCenterX,clockCenterY,clockRadius);
-        gGrad.addColorStop(0,'rgba(255,255,255,0.35)'); gGrad.addColorStop(0.4,'rgba(200,200,200,0.2)');
-        gGrad.addColorStop(0.7,'rgba(50,50,50,0.1)');   gGrad.addColorStop(1,'rgba(0,0,0,0.25)');
-        ctx.beginPath(); ctx.arc(clockCenterX,clockCenterY,clockRadius-padding,0,2*Math.PI,true);
-        ctx.fillStyle=gGrad; ctx.fill(); ctx.closePath();
-        ctx.beginPath();
-        var hlG = ctx.createRadialGradient(clockCenterX-clockRadius/3,clockCenterY-clockRadius/3,0,clockCenterX-clockRadius/3,clockCenterY-clockRadius/3,clockRadius/4);
-        hlG.addColorStop(0,'rgba(255,255,255,0.9)'); hlG.addColorStop(1,'rgba(255,255,255,0)');
-        ctx.fillStyle=hlG; ctx.arc(clockCenterX-clockRadius/3,clockCenterY-clockRadius/3,clockRadius/4,0,2*Math.PI,true); ctx.fill(); ctx.closePath();
-        ctx.beginPath(); ctx.ellipse(clockCenterX+clockRadius/6,clockCenterY+clockRadius/4,clockRadius/5,clockRadius/12,Math.PI/4,0,2*Math.PI);
-        ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.fill(); ctx.closePath();
-        ctx.beginPath();
-        var eG = ctx.createRadialGradient(clockCenterX,clockCenterY,clockRadius-padding-5,clockCenterX,clockCenterY,clockRadius-padding);
-        eG.addColorStop(0,'rgba(0,0,0,0)'); eG.addColorStop(1,'rgba(0,0,0,0.2)');
-        ctx.arc(clockCenterX,clockCenterY,clockRadius-padding,0,2*Math.PI,true); ctx.fillStyle=eG; ctx.fill(); ctx.closePath();
-        ctx.beginPath(); ctx.arc(clockCenterX-clockRadius/4,clockCenterY-clockRadius/3,clockRadius/12,0,2*Math.PI,true);
-        ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.fill(); ctx.closePath();
-        ctx.beginPath(); ctx.ellipse(clockCenterX,clockCenterY+clockRadius/3,clockRadius/3,clockRadius/15,0,0,2*Math.PI);
-        ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fill(); ctx.closePath();
-
-        ctx.restore();
-    }
-
-    // displayCanvas теперь просто синхронизирует углы мгновенно (RAF сам перерисует)
-    function displayCanvas() {
-        _dispH = _targetH();
-        _dispM = _targetM();
-        _dispS = _targetS();
-        if (!_rafId) _drawFrame(); // страховка если RAF ещё не запущен
-    }
+    });
 
     window.addEventListener('load', function() {
         resizeCanvas();
@@ -845,12 +1007,9 @@
         hour   = d.getHours();
         minute = d.getMinutes();
         second = d.getSeconds();
-        _dispH = _targetH(); _dispM = _targetM(); _dispS = _targetS();
-        _lastT = performance.now();
-        _rafId = requestAnimationFrame(_rafLoop);
+        displayCanvas();
         showGermanTime();
         startClock();
-        loadTheme();
     });
 
     // Перечитываем настройки если редактор что-то изменил в localStorage

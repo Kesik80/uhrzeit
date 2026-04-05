@@ -2,7 +2,7 @@
   "CLOCK_TEXTS": [
     {
       "textHour": 11.9,
-      "radius_k": 0.96,
+      "radius_k": 1,
       "lines": [
         [
           {
@@ -18,7 +18,7 @@
     },
     {
       "textHour": 1.2,
-      "radius_k": 1,
+      "radius_k": 1.06,
       "lines": [
         [
           {
@@ -38,7 +38,7 @@
     },
     {
       "textHour": 2.2,
-      "radius_k": 1.08,
+      "radius_k": 1.15,
       "lines": [
         [
           {
@@ -58,7 +58,7 @@
     },
     {
       "textHour": 3,
-      "radius_k": 1.04,
+      "radius_k": 1.1,
       "lines": [
         [
           {
@@ -80,7 +80,7 @@
     },
     {
       "textHour": 3.8,
-      "radius_k": 1.1,
+      "radius_k": 1.15,
       "lines": [
         [
           {
@@ -100,7 +100,7 @@
     },
     {
       "textHour": 4.7,
-      "radius_k": 1.08,
+      "radius_k": 1.15,
       "lines": [
         [
           {
@@ -124,7 +124,7 @@
     },
     {
       "textHour": 5.9,
-      "radius_k": 0.93,
+      "radius_k": 1,
       "lines": [
         [
           {
@@ -140,7 +140,7 @@
     },
     {
       "textHour": 7.2,
-      "radius_k": 1.03,
+      "radius_k": 1.1,
       "lines": [
         [
           {
@@ -163,8 +163,8 @@
       ]
     },
     {
-      "textHour": 8.1,
-      "radius_k": 1.04,
+      "textHour": 8.2,
+      "radius_k": 1.1,
       "lines": [
         [
           {
@@ -184,7 +184,7 @@
     },
     {
       "textHour": 9,
-      "radius_k": 1.01,
+      "radius_k": 1.08,
       "lines": [
         [
           {
@@ -206,7 +206,7 @@
     },
     {
       "textHour": 9.9,
-      "radius_k": 1.06,
+      "radius_k": 1.12,
       "lines": [
         [
           {
@@ -226,7 +226,7 @@
     },
     {
       "textHour": 10.9,
-      "radius_k": 0.98,
+      "radius_k": 1.04,
       "lines": [
         [
           {

@@ -215,21 +215,17 @@
     const ORIG_H = 640;
     var clockCenterX, clockCenterY, clockRadius, numbersRadius;
 
-    // ─── Настройки из редактора (localStorage) ───────────────────────────────
-    const STORAGE_KEY = 'uhrzeit_clock_texts_v4';
-    const ARC_KEY     = 'uhrzeit_arc_settings_v2';
+    // ─── Настройки из GitHub ──────────────────────────────────────────────────
+    var _settingsSha = null; // sha нужен для обновления файла
 
-    function loadFromStorage() {
+    async function loadSettingsFromGitHub() {
         try {
-            var s = localStorage.getItem(STORAGE_KEY);
-            if (s) { var p = JSON.parse(s); if (p[0] && p[0].lines) return p; }
-        } catch(e) {}
-        return null;
-    }
-    function loadArcFromStorage() {
-        try {
-            var s = localStorage.getItem(ARC_KEY);
-            if (s) return JSON.parse(s);
+            var r = await fetch('/api/load-settings');
+            var data = await r.json();
+            if (data.ok && data.settings) {
+                _settingsSha = data.sha || null;
+                return data.settings;
+            }
         } catch(e) {}
         return null;
     }
@@ -248,7 +244,7 @@
         colorRight: '#FFC04C',
         colorLeft:  '#FF8970',
     };
-    const ARC = Object.assign({}, ARC_DEFAULT, loadArcFromStorage());
+    var ARC = Object.assign({}, ARC_DEFAULT);
 
     // ─── CANVAS RESIZE ───────────────────────────────────────────────────────
     const canvas = document.getElementById('myCanvas');
@@ -528,7 +524,7 @@
         { textHour: 10.0, radius_k: 1.11, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
         { textHour: 10.9, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
     ];
-    var CLOCK_TEXTS = loadFromStorage() || CLOCK_TEXTS_DEFAULT;
+    var CLOCK_TEXTS = CLOCK_TEXTS_DEFAULT.map(function(x){ return JSON.parse(JSON.stringify(x)); });
 
     // Рисует строку слов с разными цветами
     // Адаптация цветов надписей для тёмной темы
@@ -1027,26 +1023,25 @@
         }
     });
 
-    window.addEventListener('load', function() {
+    window.addEventListener('load', async function() {
         resizeCanvas();
         var d  = new Date();
         hour   = d.getHours();
         minute = d.getMinutes();
         second = d.getSeconds();
+
+        // Загружаем настройки из GitHub
+        var saved = await loadSettingsFromGitHub();
+        if (saved) {
+            if (saved.CLOCK_TEXTS && saved.CLOCK_TEXTS[0] && saved.CLOCK_TEXTS[0].lines) {
+                CLOCK_TEXTS = saved.CLOCK_TEXTS;
+            }
+            if (saved.ARC) Object.assign(ARC, saved.ARC);
+        }
+
         displayCanvas();
         showGermanTime();
         startClock();
-    });
-
-    // Перечитываем настройки если редактор что-то изменил в localStorage
-    window.addEventListener('storage', function(e) {
-        if (e.key === STORAGE_KEY || e.key === ARC_KEY) {
-            var newTexts = loadFromStorage();
-            if (newTexts) CLOCK_TEXTS = newTexts;
-            var newArc = loadArcFromStorage();
-            if (newArc) Object.assign(ARC, newArc);
-            displayCanvas();
-        }
     });
 </script>
 </body>

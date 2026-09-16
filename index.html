@@ -1078,20 +1078,16 @@
     }
 
     // ── Цвет системной панели ──
-    // Установленное приложение: цвет бара рисует сама система (у Xiaomi ≈ #f7f9fc
-    // в светлой теме телефона), а от theme-color Chrome берёт только цвет значков.
-    // Поэтому в приложении theme-color следует теме ТЕЛЕФОНА — иначе в тёмной теме
-    // приложения значки становятся белыми на светлом баре и пропадают.
+    // Установленное приложение: панель всегда тёмная — цвет задан в manifest
+    // (theme_color #1a1a1a), страница его не меняет. От theme-color здесь зависит
+    // только цвет значков, поэтому держим его тёмным → значки белые и видны.
     // В обычной вкладке браузера адресная строка следует теме приложения.
     var mqStandalone = window.matchMedia ? window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)') : null;
-    var mqSysDark    = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
     function syncThemeColor() {
         var standalone = !!(mqStandalone && mqStandalone.matches) || navigator.standalone === true;
-        var dark = standalone ? !!(mqSysDark && mqSysDark.matches) : isDark;
-        var color = standalone ? (dark ? '#000000' : '#f7f9fc') : (dark ? '#1a1a1a' : '#ffffff');
+        var color = (standalone || isDark) ? '#1a1a1a' : '#ffffff';
         document.getElementById('themeColorMeta').setAttribute('content', color);
     }
-    if (mqSysDark && mqSysDark.addEventListener) mqSysDark.addEventListener('change', syncThemeColor);
 
     function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
     function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }

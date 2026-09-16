@@ -27,7 +27,8 @@ const ALLOWED_VOICES = {
 };
 const DEFAULT_VOICE = 'CwhRBWXzGAHq8TQ4Fs17';
 
-const ALLOWED_MODELS = ['eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_turbo_v2_5', 'eleven_v3'];
+// Turbo устарела (ElevenLabs рекомендует Flash) — убрана
+const ALLOWED_MODELS = ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5'];
 
 // 64 кбит/с моно — речь звучит чисто, а 144 файла весят ~2–3 МБ, а не 5+
 const OUTPUT_FORMAT = 'mp3_44100_64';

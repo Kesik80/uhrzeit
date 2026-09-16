@@ -52,13 +52,16 @@
     .chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
     .chk input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
 
-    /* переключатель v3 */
-    .switch {
-        display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        margin-top: 12px; padding: 10px; border-radius: 10px; border: 1px dashed var(--v3);
+    /* выбор модели */
+    .models { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+    .models button {
+        margin: 0; text-align: left; padding: 10px 12px; border-radius: 10px;
+        background: #fff; color: var(--text); border: 1px solid var(--border);
+        display: flex; flex-direction: column; gap: 2px;
     }
-    .switch .t { font-weight: bold; color: var(--v3); }
-    .switch input { width: 44px; height: 24px; accent-color: var(--v3); }
+    .models button small { font-weight: normal; color: var(--muted); font-size: 11.5px; }
+    .models button.on { border-color: var(--accent); background: #eef4fc; box-shadow: inset 0 0 0 1px var(--accent); }
+    .models button.on[data-m="eleven_v3"] { border-color: var(--v3); background: #f6eefa; box-shadow: inset 0 0 0 1px var(--v3); color: var(--v3); }
     body.v3 .only-classic { display: none !important; }
     body:not(.v3) .only-v3 { display: none !important; }
 
@@ -166,21 +169,14 @@
         <h2>Голос</h2>
         <select id="voice"></select>
 
-        <div class="only-classic">
-            <label>Модель</label>
-            <select id="model">
-                <option value="eleven_multilingual_v2">Multilingual v2 — качество</option>
-                <option value="eleven_turbo_v2_5">Turbo v2.5 — быстрее</option>
-                <option value="eleven_flash_v2_5">Flash v2.5 — самая быстрая</option>
-            </select>
-        </div>
-
-        <div class="switch">
-            <div>
-                <div class="t">Eleven v3 — эмоции</div>
-                <div class="hint">Можно задать настроение голоса; свои правила настроек</div>
-            </div>
-            <input type="checkbox" id="v3">
+        <label>Модель</label>
+        <div class="models" id="models">
+            <button type="button" data-m="eleven_v3">Eleven v3 — эмоции
+                <small>настроение голоса, самая живая; дубли звучат по-разному</small></button>
+            <button type="button" data-m="eleven_multilingual_v2">Multilingual v2 — качество
+                <small>ровная и предсказуемая, понимает невидимый вопрос</small></button>
+            <button type="button" data-m="eleven_flash_v2_5">Flash v2.5 — быстрее
+                <small>вдвое дешевле за символ, звучит попроще</small></button>
         </div>
 
         <div class="only-v3">
@@ -337,7 +333,7 @@
     function remember() {
         try {
             localStorage.setItem('uhrzeit_voicegen', JSON.stringify({
-                voice: $('voice').value, model: $('model').value, v3: $('v3').checked,
+                voice: $('voice').value, model: model,
                 v3stab: v3stab, tags: $('tags').value,
                 stab: $('stab').value, sim: $('sim').value, style: $('style').value, speed: $('speed').value,
                 ctx: $('ctx').checked, dot: $('dot').checked, sample: $('sampleKey').value
@@ -367,13 +363,21 @@
     // ── настройки ───────────────────────────────────────────
     var v3stab = 0.5;
 
-    function isV3() { return $('v3').checked; }
+    var MODELS = ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5'];
+    var model = 'eleven_multilingual_v2';
+    function isV3() { return model === 'eleven_v3'; }
+    $('models').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        model = b.dataset.m;
+        showSettings();
+    });
 
     function readSettings() {
         var v3 = isV3();
         return {
             voice: $('voice').value,
-            model: v3 ? 'eleven_v3' : $('model').value,
+            model: model,
             stability: v3 ? v3stab : +$('stab').value,
             similarity_boost: +$('sim').value,
             style: +$('style').value,
@@ -386,11 +390,10 @@
 
     function applySettings(s) {
         if (s.voice && VOICES[s.voice]) $('voice').value = s.voice;
-        var v3 = s.model === 'eleven_v3';
-        $('v3').checked = v3;
+        model = MODELS.indexOf(s.model) >= 0 ? s.model : 'eleven_multilingual_v2';
+        var v3 = isV3();
         if (v3) { v3stab = s.stability; $('tags').value = s.tags || ''; paintChips(); }
         else {
-            $('model').value = s.model;
             $('stab').value = s.stability;
             $('ctx').checked = !!s.ctx;
         }
@@ -418,6 +421,9 @@
 
     function showSettings() {
         document.body.classList.toggle('v3', isV3());
+        Array.prototype.forEach.call($('models').children, function (b) {
+            b.classList.toggle('on', b.dataset.m === model);
+        });
         $('vStab').textContent = (+$('stab').value).toFixed(2);
         $('vSim').textContent = (+$('sim').value).toFixed(2);
         $('vStyle').textContent = (+$('style').value).toFixed(2);
@@ -481,7 +487,7 @@
         });
     });
     ['stab', 'sim', 'style', 'speed'].forEach(function (id) { $(id).addEventListener('input', showSettings); });
-    ['voice', 'model', 'v3', 'ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
+    ['voice', 'ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
     $('tags').addEventListener('input', function () { paintChips(); remember(); paintQuota(); });
 
     // сохранённые настройки или пресет «Живо»
@@ -499,8 +505,8 @@
             return;
         }
         if (VOICES[sv.voice]) $('voice').value = sv.voice;
-        if (sv.model) $('model').value = sv.model;
-        $('v3').checked = !!sv.v3;
+        // старый формат: флажок v3 отдельно, Turbo больше не поддерживается
+        model = sv.v3 ? 'eleven_v3' : (MODELS.indexOf(sv.model) >= 0 ? sv.model : 'eleven_multilingual_v2');
         v3stab = sv.v3stab === undefined ? 0.5 : +sv.v3stab;
         $('tags').value = sv.tags || '';
         $('stab').value = sv.stab; $('sim').value = sv.sim; $('style').value = sv.style; $('speed').value = sv.speed;

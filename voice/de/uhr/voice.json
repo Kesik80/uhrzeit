@@ -1,0 +1,82 @@
+{
+ "files": {
+  "00-00": {
+   "text": "[confident] [excited] Es ist zwölf Uhr",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  },
+  "00-05": {
+   "text": "[confident] [excited] Es ist fünf nach zwölf",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  },
+  "00-10": {
+   "text": "[confident] [excited] Es ist zehn nach zwölf",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  },
+  "00-15": {
+   "text": "[confident] [excited] Es ist Viertel nach zwölf",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  },
+  "00-20": {
+   "text": "[confident] [excited] Es ist zwanzig nach zwölf",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  },
+  "00-25": {
+   "text": "[confident] [excited] Es ist fünf vor halb eins",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  },
+  "00-30": {
+   "text": "[confident] [excited] Es ist halb eins",
+   "voice": "Laura",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.65,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "date": "2026-09-16"
+  }
+ },
+ "updated": "2026-09-16T20:57:52.039Z"
+}

@@ -166,7 +166,7 @@
     </div>
 
     <button id="btnTheme" onclick="toggleTheme()" title="Сменить тему">🌙</button>
-    <h1>Wie spät ist es?</h1>
+    <h1 id="appTitle">Wie spät ist es?</h1>
     <div id="digitalClock">00:00:00</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px">
         <div id="clock"> </div>
@@ -214,7 +214,6 @@
     </label>
 
     <a href="editor.html" id="editorLink" style="font-size:11px;color:var(--hint);text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
-    <a href="voicegen.html" id="voiceLink" style="font-size:11px;color:var(--hint);text-decoration:none;margin-top:2px">🎙 Озвучка</a>
 
 <script src="timewords.js"></script>
 <script>
@@ -840,7 +839,6 @@
         document.getElementById('gamePhaseWrap').style.display = active ? 'flex' : 'none';
         if (active) positionTimer();
         document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
-        document.getElementById('voiceLink').style.visibility  = active ? 'hidden' : 'visible';
         // баннер установки не должен закрывать игру
         if (window.uhrzeitInstall) {
             if (active) window.uhrzeitInstall.hide();
@@ -1065,6 +1063,49 @@
             displayCanvas();
         }
     });
+</script>
+<script>
+// ── Скрытый вход в озвучку: удерживать заголовок 1,5 с ──
+// Дальше voicegen.html сам спросит пароль (если вход ещё не выполнен в этой сессии).
+(function () {
+    var el = document.getElementById('appTitle');
+    var HOLD_MS = 1500;
+    var timer = null, sx = 0, sy = 0;
+
+    // без выделения текста и системного меню при долгом нажатии
+    el.style.userSelect = 'none';
+    el.style.webkitUserSelect = 'none';
+    el.style.webkitTouchCallout = 'none';
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    function cancel() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        el.style.transition = 'opacity .2s';
+        el.style.opacity = '';
+    }
+    function start(x, y) {
+        if (typeof isGameMode !== 'undefined' && isGameMode) return;
+        cancel();
+        sx = x; sy = y;
+        // лёгкое затухание — подсказка, что удержание засчитывается
+        el.style.transition = 'opacity ' + HOLD_MS + 'ms linear';
+        el.style.opacity = '0.35';
+        timer = setTimeout(function () {
+            timer = null;
+            if (navigator.vibrate) navigator.vibrate(30);
+            location.href = 'voicegen.html';
+        }, HOLD_MS);
+    }
+    function moved(x, y) {
+        if (timer && (Math.abs(x - sx) > 12 || Math.abs(y - sy) > 12)) cancel();
+    }
+
+    el.addEventListener('pointerdown', function (e) { start(e.clientX, e.clientY); });
+    el.addEventListener('pointermove', function (e) { moved(e.clientX, e.clientY); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { el.addEventListener(t, cancel); });
+    // вернулись кнопкой «Назад» — заголовок снова обычный
+    window.addEventListener('pageshow', cancel);
+})();
 </script>
 <script src="install.js"></script>
 <script src="console.js"></script>

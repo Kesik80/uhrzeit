@@ -111,44 +111,6 @@
         }
         #digitalClock.paused { opacity: 0.6; }
 
-        /* ── Предложение установки ── */
-        #installSheet {
-            position: fixed;
-            left: 12px; right: 12px;
-            bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-            max-width: 480px;
-            margin: 0 auto;
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-            padding: 14px;
-            border-radius: 16px;
-            background: var(--sheet-bg, #ffffff);
-            color: var(--text);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
-            border: 1px solid var(--sheet-border, rgba(0,0,0,0.08));
-            z-index: 300;
-            transform: translateY(140%);
-            transition: transform 0.25s ease;
-        }
-        #installSheet[hidden] { display: none; }
-        #installSheet.show { transform: translateY(0); }
-        #installSheet img { border-radius: 12px; flex-shrink: 0; }
-        #installSheet .is-body { flex: 1; min-width: 0; }
-        #installSheet .is-title { font-weight: bold; font-size: 15px; margin-bottom: 4px; }
-        #installSheet .is-text { font-size: 13px; color: var(--hint); line-height: 1.35; }
-        #installSheet .is-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-        #installSheet button {
-            border: none; border-radius: 10px; padding: 9px 16px;
-            font-size: 14px; font-weight: bold; cursor: pointer; font-family: inherit;
-        }
-        #installSheet .is-later { background: transparent; color: var(--hint); }
-        #installSheet .is-ok { background: #2ecc71; color: #fff; }
-        html.dark #installSheet { --sheet-bg: #262626; --sheet-border: rgba(255,255,255,0.1); }
-        @media (prefers-color-scheme: dark) {
-            html:not(.light) #installSheet { --sheet-bg: #262626; --sheet-border: rgba(255,255,255,0.1); }
-        }
-
         #btnTheme {
             position: fixed;
             top: calc(10px + env(safe-area-inset-top, 0px));
@@ -188,7 +150,7 @@
 
     </style>
 </head>
-<body>
+<body data-install="banner">
 
     <!-- Оверлей таймер — поверх всего, не влияет на layout -->
     <div id="gamePhaseWrap" style="display:none;position:fixed;top:0;left:0;width:100%;z-index:100;
@@ -251,7 +213,6 @@
         🔊 Авто-звук
     </label>
 
-    <button id="installLink" onclick="installApp()" style="display:none;background:none;border:none;font-size:12px;color:var(--hint);cursor:pointer;margin-top:2px;font-family:inherit"></button>
     <a href="editor.html" id="editorLink" style="font-size:11px;color:var(--hint);text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
 
 <script>
@@ -982,7 +943,11 @@
         document.getElementById('gamePhaseWrap').style.display = active ? 'flex' : 'none';
         if (active) positionTimer();
         document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
-        document.getElementById('installLink').style.visibility = active ? 'hidden' : 'visible';
+        // баннер установки не должен закрывать игру
+        if (window.uhrzeitInstall) {
+            if (active) window.uhrzeitInstall.hide();
+            else if (window.uhrzeitInstall.resume) window.uhrzeitInstall.resume();
+        }
         document.getElementById('gameSettings').style.display      = active ? 'flex' : 'none';
         document.getElementById('normalSpeakWrap').style.display   = active ? 'none' : 'flex';
         // Скрываем/показываем надписи и дуги на циферблате через флаг
@@ -1003,8 +968,6 @@
     }
 
     function startGame() {
-        var sh = document.getElementById('installSheet');
-        if (sh) { sh.classList.remove('show'); sh.hidden = true; }
         clearTimeout(idleTimeout);  // иначе через 30 с после тапа часы стартуют посреди игры
         stopClock();           // останавливаем реальные часы
         setGameUI(true);
@@ -1174,131 +1137,7 @@
         }
     });
 </script>
-<!-- ── Предложение установить приложение ── -->
-<div id="installSheet" role="dialog" aria-modal="false" hidden>
-    <img src="/icons/icon-192.png" alt="" width="48" height="48">
-    <div class="is-body">
-        <div class="is-title" id="isTitle"></div>
-        <div class="is-text" id="isText"></div>
-        <div class="is-btns">
-            <button class="is-later" id="isLater" onclick="dismissInstall()"></button>
-            <button class="is-ok" id="isOk" onclick="installApp()"></button>
-        </div>
-    </div>
-</div>
-
-<script>
-// ═══════════════════════════════════════════════════════════════════════════
-// УСТАНОВКА PWA — язык по устройству (ru / uk / de / en)
-// ═══════════════════════════════════════════════════════════════════════════
-(function () {
-    var I18N = {
-        ru: { title: 'Установить «Uhrzeit»?', text: 'Часы откроются с рабочего стола как обычное приложение — без адресной строки.',
-              ok: 'Установить', later: 'Не сейчас', link: '📲 Установить приложение',
-              ios: 'Нажмите «Поделиться» ⬆︎ внизу Safari, затем «На экран „Домой“».', iosOk: 'Понятно' },
-        uk: { title: 'Встановити «Uhrzeit»?', text: 'Годинник відкриватиметься з робочого столу як звичайний застосунок — без адресного рядка.',
-              ok: 'Встановити', later: 'Не зараз', link: '📲 Встановити застосунок',
-              ios: 'Натисніть «Поділитися» ⬆︎ внизу Safari, потім «На початковий екран».', iosOk: 'Зрозуміло' },
-        de: { title: '„Uhrzeit“ installieren?', text: 'Die Uhr startet dann direkt vom Startbildschirm wie eine normale App – ohne Adressleiste.',
-              ok: 'Installieren', later: 'Später', link: '📲 App installieren',
-              ios: 'Tippe unten in Safari auf „Teilen“ ⬆︎ und dann auf „Zum Home-Bildschirm“.', iosOk: 'Verstanden' },
-        en: { title: 'Install “Uhrzeit”?', text: 'The clock will open from your home screen like a regular app – no address bar.',
-              ok: 'Install', later: 'Not now', link: '📲 Install app',
-              ios: 'Tap “Share” ⬆︎ at the bottom of Safari, then “Add to Home Screen”.', iosOk: 'Got it' }
-    };
-    var langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en']);
-    var L = I18N.en;
-    for (var i = 0; i < langs.length; i++) {
-        var code = String(langs[i]).slice(0, 2).toLowerCase();
-        if (I18N[code]) { L = I18N[code]; break; }
-    }
-
-    var KEY = 'uhrzeit_install_dismissed';
-    var SNOOZE_DAYS = 7;
-    var deferred = null;
-
-    var ua = navigator.userAgent || '';
-    var isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    var isIOSSafari = isIOS && /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
-
-    function isInstalled() {
-        return (window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches ||
-                                      window.matchMedia('(display-mode: fullscreen)').matches)) ||
-               navigator.standalone === true;
-    }
-    function snoozed() {
-        try {
-            var t = +localStorage.getItem(KEY);
-            return t && (Date.now() - t) < SNOOZE_DAYS * 864e5;
-        } catch (e) { return false; }
-    }
-
-    var sheet = document.getElementById('installSheet');
-    var link  = document.getElementById('installLink');
-    document.getElementById('isTitle').textContent = L.title;
-    document.getElementById('isLater').textContent = L.later;
-    link.textContent = L.link;
-
-    function showSheet() {
-        if (isInstalled() || (typeof isGameMode !== 'undefined' && isGameMode)) return;
-        if (isIOSSafari) {
-            document.getElementById('isText').textContent = L.ios;
-            document.getElementById('isOk').textContent   = L.iosOk;
-        } else {
-            document.getElementById('isText').textContent = L.text;
-            document.getElementById('isOk').textContent   = L.ok;
-        }
-        sheet.hidden = false;
-        requestAnimationFrame(function () { sheet.classList.add('show'); });
-    }
-    function hideSheet() {
-        sheet.classList.remove('show');
-        setTimeout(function () { sheet.hidden = true; }, 250);
-    }
-
-    window.dismissInstall = function () {
-        try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
-        hideSheet();
-    };
-
-    window.installApp = async function () {
-        if (isIOSSafari) {                       // на iOS установка только вручную
-            if (!sheet.hidden && sheet.classList.contains('show')) { window.dismissInstall(); }
-            else { showSheet(); }
-            return;
-        }
-        if (!deferred) return;
-        hideSheet();
-        deferred.prompt();
-        try {
-            var choice = await deferred.userChoice;
-            if (choice.outcome !== 'accepted') window.dismissInstall();
-        } catch (e) {}
-        deferred = null;                         // событие одноразовое
-        link.style.display = 'none';
-    };
-
-    // Android / Chrome: браузер сообщает, что установка возможна
-    window.addEventListener('beforeinstallprompt', function (e) {
-        e.preventDefault();
-        deferred = e;
-        link.style.display = 'inline-block';     // ручная кнопка доступна всегда
-        if (!snoozed()) setTimeout(showSheet, 3000);
-    });
-
-    window.addEventListener('appinstalled', function () {
-        deferred = null;
-        link.style.display = 'none';
-        hideSheet();
-    });
-
-    // iOS Safari: события нет — показываем подсказку сами
-    if (isIOSSafari && !isInstalled()) {
-        link.style.display = 'inline-block';
-        if (!snoozed()) setTimeout(showSheet, 3000);
-    }
-})();
-</script>
+<script src="install.js"></script>
 <script src="console.js"></script>
 </body>
 </html>

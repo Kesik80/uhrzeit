@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a1a1a">
+<link rel="manifest" href="/icons/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<title>Озвучка времени — Uhrzeit</title>
+<style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+        --bg: #f0f2f5; --surface: #ffffff; --border: #d0d5de;
+        --accent: #1a6fc4; --green: #2ecc71; --red: #cc2244; --orange: #e67e22;
+        --muted: #7a8099; --text: #1a1d2e; --v3: #8e44ad;
+    }
+    body { background: var(--bg); color: var(--text); font-family: Tahoma, sans-serif; font-size: 14px; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 12px 12px 40px; }
+
+    header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    header h1 { font-size: 17px; color: var(--accent); }
+    header nav { display: flex; gap: 6px; }
+    header a {
+        background: var(--accent); color: #fff; text-decoration: none;
+        border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: bold;
+    }
+    header a.alt { background: #7f8c8d; }
+
+    .card {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+        padding: 12px; margin-bottom: 10px;
+    }
+    .card h2 { font-size: 12px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 9px; }
+    label { display: block; font-size: 13px; color: var(--text); margin: 10px 0 4px; }
+    label b { color: var(--accent); }
+    .hint { color: var(--muted); font-size: 11.5px; font-weight: normal; }
+    select, input[type=text], input[type=password] {
+        width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+        font-size: 15px; font-family: inherit; background: #fff; color: var(--text);
+    }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+    button {
+        font-family: inherit; font-size: 14px; font-weight: bold; cursor: pointer;
+        border: none; border-radius: 9px; padding: 11px 12px; color: #fff; background: var(--accent);
+        width: 100%; margin-top: 8px;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.go { background: var(--green); }
+    button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    button.slim { width: auto; padding: 6px 10px; font-size: 12px; margin: 0; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
+    .chk input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+
+    /* переключатель v3 */
+    .switch {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        margin-top: 12px; padding: 10px; border-radius: 10px; border: 1px dashed var(--v3);
+    }
+    .switch .t { font-weight: bold; color: var(--v3); }
+    .switch input { width: 44px; height: 24px; accent-color: var(--v3); }
+    body.v3 .only-classic { display: none !important; }
+    body:not(.v3) .only-v3 { display: none !important; }
+
+    .seg { display: flex; border: 1px solid var(--v3); border-radius: 9px; overflow: hidden; }
+    .seg button { flex: 1; margin: 0; border-radius: 0; background: transparent; color: var(--v3); font-size: 12px; padding: 8px 4px; }
+    .seg button.on { background: var(--v3); color: #fff; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .chips button {
+        width: auto; margin: 0; padding: 5px 9px; font-size: 12px; border-radius: 14px;
+        background: #f3e9f7; color: var(--v3);
+    }
+
+    /* лимит */
+    .qbar { position: relative; height: 10px; background: #e6e9ef; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+    .qbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--green); }
+    .qbar i.warn { background: var(--orange); }
+    .qbar i.crit { background: var(--red); }
+    .qbar s {
+        position: absolute; top: 0; bottom: 0; display: none;
+        background: repeating-linear-gradient(45deg, #1a6fc4 0 3px, transparent 3px 6px); opacity: .6;
+    }
+    .qnums { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+    /* пробы */
+    .take {
+        display: flex; align-items: center; gap: 8px; padding: 8px 0;
+        border-top: 1px solid #eef0f4; font-size: 12.5px;
+    }
+    .take:first-child { border-top: none; }
+    .take .lbl { flex: 1; min-width: 0; }
+    .take .lbl small { display: block; color: var(--muted); }
+    .take.v3 .lbl b { color: var(--v3); }
+    .ib {
+        width: 36px; height: 36px; flex-shrink: 0; margin: 0; padding: 0;
+        border-radius: 50%; font-size: 15px; background: #eef3fb; color: var(--accent);
+    }
+    .ib.red { background: #fbeef1; color: var(--red); }
+    .ib.site { background: #eaf8ef; color: #1e8a4c; }
+
+    /* прогресс и журнал */
+    .bar { height: 6px; background: #e6e9ef; border-radius: 3px; overflow: hidden; margin-top: 10px; }
+    .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .log { max-height: 150px; overflow: auto; font-size: 12px; margin-top: 8px; line-height: 1.45; }
+    .log .ok { color: #1e8a4c; } .log .err { color: var(--red); } .log .new { color: var(--accent); }
+
+    /* список фраз */
+    .filters { display: flex; gap: 5px; margin-top: 10px; }
+    .filters button { flex: 1; margin: 0; padding: 6px 4px; font-size: 12px; background: #eef0f4; color: var(--text); }
+    .filters button.on { background: var(--text); color: #fff; }
+    .item { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-top: 1px solid #eef0f4; }
+    .item .tm { font-family: monospace; font-size: 13px; color: var(--muted); width: 42px; flex-shrink: 0; }
+    .item .ph { flex: 1; min-width: 0; font-size: 13px; }
+    .item .ph small { display: block; font-size: 11px; color: var(--muted); }
+    .st { font-size: 10.5px; padding: 2px 6px; border-radius: 8px; flex-shrink: 0; }
+    .st.have { background: #eaf8ef; color: #1e8a4c; }
+    .st.fresh { background: #e8f0fb; color: var(--accent); }
+    .st.miss { background: #f4f4f6; color: var(--muted); }
+    .st.done { background: #fff4e5; color: var(--orange); }
+
+    /* вход */
+    #login {
+        position: fixed; inset: 0; background: var(--bg); z-index: 50;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px;
+    }
+    #login h2 { color: var(--accent); font-size: 20px; }
+    #login input { max-width: 260px; text-align: center; letter-spacing: 5px; font-size: 18px; }
+    #login button { max-width: 260px; }
+    #loginErr { color: var(--red); min-height: 16px; font-size: 13px; text-align: center; }
+    code { background: #eef0f4; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div id="login">
+    <h2>🎙 Озвучка времени</h2>
+    <div class="hint">Пароль тот же, что у редактора надписей</div>
+    <input type="password" id="pwd" placeholder="••••••" autocomplete="current-password">
+    <button id="btnLogin">Войти</button>
+    <div id="loginErr"></div>
+    <a href="/" style="color:var(--muted);font-size:13px">← К часам</a>
+</div>
+
+<div class="wrap">
+    <header>
+        <h1>🎙 Озвучка времени</h1>
+        <nav><a href="/">▶ Часы</a><a class="alt" href="editor.html">⚙ Надписи</a></nav>
+    </header>
+
+    <!-- лимит -->
+    <div class="card">
+        <div class="row" style="justify-content:space-between">
+            <h2 id="qTitle" style="margin:0">Лимит ElevenLabs</h2>
+            <button class="ghost slim" id="qRefresh">↻</button>
+        </div>
+        <div class="qbar"><i id="qFill"></i><s id="qNeed"></s></div>
+        <div class="qnums" id="qNums">…</div>
+    </div>
+
+    <!-- голос и модель -->
+    <div class="card">
+        <h2>Голос</h2>
+        <select id="voice"></select>
+
+        <div class="only-classic">
+            <label>Модель</label>
+            <select id="model">
+                <option value="eleven_multilingual_v2">Multilingual v2 — качество</option>
+                <option value="eleven_turbo_v2_5">Turbo v2.5 — быстрее</option>
+                <option value="eleven_flash_v2_5">Flash v2.5 — самая быстрая</option>
+            </select>
+        </div>
+
+        <div class="switch">
+            <div>
+                <div class="t">Eleven v3 — эмоции</div>
+                <div class="hint">Теги вроде [cheerful]; другие правила настроек</div>
+            </div>
+            <input type="checkbox" id="v3">
+        </div>
+
+        <div class="only-v3">
+            <label>Характер <span class="hint">v3 понимает только три положения</span></label>
+            <div class="seg" id="v3stab">
+                <button data-v="0">Творчески</button>
+                <button data-v="0.5">Естественно</button>
+                <button data-v="1">Стабильно</button>
+            </div>
+            <label>Теги перед фразой <span class="hint">читаются как указание, вслух не звучат</span></label>
+            <input type="text" id="tags" placeholder="[cheerful]">
+            <div class="chips" id="chips"></div>
+        </div>
+    </div>
+
+    <!-- как читать -->
+    <div class="card">
+        <h2>Как читать</h2>
+        <div class="row only-classic">
+            <button class="ghost slim" data-preset="flat">Ровно</button>
+            <button class="ghost slim" data-preset="live">Живо</button>
+            <button class="ghost slim" data-preset="warm">Тепло</button>
+        </div>
+        <div class="only-classic">
+            <label>Ровность <b id="vStab"></b> <span class="hint">ниже — живее, но больше разброс</span></label>
+            <input type="range" id="stab" min="0" max="1" step="0.05">
+        </div>
+        <label>Похожесть на голос <b id="vSim"></b></label>
+        <input type="range" id="sim" min="0" max="1" step="0.05">
+        <label>Артистичность <b id="vStyle"></b> <span class="hint">0–0.4 обычно достаточно</span></label>
+        <input type="range" id="style" min="0" max="1" step="0.05">
+        <label>Скорость <b id="vSpeed"></b></label>
+        <input type="range" id="speed" min="0.7" max="1.2" step="0.02">
+        <div class="chk only-classic">
+            <input type="checkbox" id="ctx">
+            <span>Невидимый вопрос перед фразой <span class="hint">«Entschuldigung, wie spät ist es?» — звучит как живой ответ</span></span>
+        </div>
+        <div class="chk">
+            <input type="checkbox" id="dot">
+            <span>Точка в конце фразы</span>
+        </div>
+    </div>
+
+    <!-- пробы -->
+    <div class="card">
+        <h2>Пробы — сравнить настройки</h2>
+        <select id="sampleKey"></select>
+        <button id="btnSample">▶ Сделать пробу</button>
+        <div class="hint" style="margin-top:6px">Каждая проба остаётся в списке с её настройками: переключай модель и ползунки, слушай подряд. «⤴» возвращает настройки пробы.</div>
+        <div id="takes" style="margin-top:8px"></div>
+    </div>
+
+    <!-- запись -->
+    <div class="card">
+        <h2>Запись всех фраз (144)</h2>
+        <button class="ghost" id="btnCheck">1 · Проверить, что уже есть</button>
+        <div class="chk">
+            <input type="checkbox" id="redo">
+            <span>Перезаписать и те, что уже есть</span>
+        </div>
+        <button id="btnGen">2 · Озвучить недостающие</button>
+        <button class="go" id="btnPub" disabled>3 · Записать одним коммитом</button>
+        <div class="bar"><i id="fill"></i></div>
+        <div class="log" id="log"></div>
+
+        <div class="filters" id="filters">
+            <button data-f="all" class="on">Все</button>
+            <button data-f="miss">Нет</button>
+            <button data-f="fresh">Новые</button>
+            <button data-f="have">Есть</button>
+        </div>
+        <div id="list"></div>
+    </div>
+
+    <div class="card hint" style="line-height:1.5">
+        Файлы: <code>voice/de/uhr/ЧЧ-ММ.mp3</code> в репозитории, настройки каждой фразы — в <code>voice.json</code>.
+        Часы берут запись для ровных 5 минут, остальное читает системный голос.
+        После коммита Vercel пересобирает сайт около минуты — до этого проверка покажет «нет».
+    </div>
+</div>
+
+<script src="timewords.js"></script>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+
+    // ── константы ───────────────────────────────────────────
+    var VOICES = {
+        Roger:'CwhRBWXzGAHq8TQ4Fs17', Laura:'FGY2WhTYpPnrIDTdsKH5', Liam:'TX3LPaxmHKxFdv7VOQHJ',
+        Matilda:'XrExE9yKIg1WjnnlVkGX', Will:'bIHbv24MWmeRgasZH58o', Jessica:'cgSgspJ2msm6clMCkdW9',
+        Eric:'cjVigY5qzO86Huf0OWal', Brian:'nPczCjzI2devNBz1zQrb', Daniel:'onwK4e9ZLuTAKqWW03F9',
+        Lily:'pFZP5JQG7iQjIQuC4Bku', Bill:'pqHfZKP75CvOlQylNhV4'
+    };
+    var FEM = ['Laura', 'Matilda', 'Jessica', 'Lily'];
+    var DIR = 'voice/de/uhr/';
+    var CTX_BEFORE = 'Entschuldigung, wie spät ist es?';
+    var TAGS = ['[cheerful]', '[warmly]', '[friendly]', '[calm]', '[excited]', '[playfully]', '[confident]'];
+    var PRESETS = {
+        flat: { stab: 0.8,  sim: 0.8,  style: 0,    speed: 0.92, ctx: true },
+        live: { stab: 0.45, sim: 0.75, style: 0.15, speed: 1,    ctx: true },
+        warm: { stab: 0.35, sim: 0.75, style: 0.35, speed: 0.95, ctx: true }
+    };
+
+    // все 144 фразы: 00:00 … 11:55 (00 = zwölf)
+    var ITEMS = [];
+    for (var h = 0; h < 12; h++) {
+        for (var m = 0; m < 60; m += 5) {
+            ITEMS.push({ key: voiceKey(h, m), h: h, m: m,
+                         time: String(h || 12).padStart(2, '0') + ':' + String(m).padStart(2, '0'),
+                         de: timeInWords(h, m).de });
+        }
+    }
+    var byKey = {};
+    ITEMS.forEach(function (it) { byKey[it.key] = it; });
+
+    var token = '';
+    var onSite = {};      // key → true
+    var fresh = {};       // key → { audio(base64), settings }
+    var committed = {};   // key → { audio, settings } — записано, ждёт деплоя
+    var meta = { files: {} };  // voice.json с сайта
+    var filter = 'all';
+    var quota = null;
+
+    // ── хранение ────────────────────────────────────────────
+    function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+    function ssSet(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) {} }
+
+    function remember() {
+        try {
+            localStorage.setItem('uhrzeit_voicegen', JSON.stringify({
+                voice: $('voice').value, model: $('model').value, v3: $('v3').checked,
+                v3stab: v3stab, tags: $('tags').value,
+                stab: $('stab').value, sim: $('sim').value, style: $('style').value, speed: $('speed').value,
+                ctx: $('ctx').checked, dot: $('dot').checked, sample: $('sampleKey').value
+            }));
+        } catch (e) {}
+    }
+
+    // ── журнал / индикатор ──────────────────────────────────
+    function log(msg, cls) {
+        var d = document.createElement('div');
+        if (cls) d.className = cls;
+        d.textContent = msg;
+        $('log').prepend(d);
+    }
+    function busy(btn, text) {
+        if (btn.dataset.label === undefined) btn.dataset.label = btn.textContent;
+        btn.textContent = text;
+        btn.disabled = true;
+    }
+    function idle(btn) {
+        if (btn.dataset.label !== undefined) btn.textContent = btn.dataset.label;
+        btn.disabled = false;
+    }
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var nf = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
+
+    // ── настройки ───────────────────────────────────────────
+    var v3stab = 0.5;
+
+    function isV3() { return $('v3').checked; }
+
+    function readSettings() {
+        var v3 = isV3();
+        return {
+            voice: $('voice').value,
+            model: v3 ? 'eleven_v3' : $('model').value,
+            stability: v3 ? v3stab : +$('stab').value,
+            similarity_boost: +$('sim').value,
+            style: +$('style').value,
+            speed: +$('speed').value,
+            tags: v3 ? $('tags').value.trim() : '',
+            ctx: !v3 && $('ctx').checked,
+            dot: $('dot').checked
+        };
+    }
+
+    function applySettings(s) {
+        if (s.voice && VOICES[s.voice]) $('voice').value = s.voice;
+        var v3 = s.model === 'eleven_v3';
+        $('v3').checked = v3;
+        if (v3) { v3stab = s.stability; $('tags').value = s.tags || ''; }
+        else {
+            $('model').value = s.model;
+            $('stab').value = s.stability;
+            $('ctx').checked = !!s.ctx;
+        }
+        $('sim').value = s.similarity_boost;
+        $('style').value = s.style;
+        $('speed').value = s.speed;
+        $('dot').checked = !!s.dot;
+        showSettings();
+    }
+
+    function describe(s) {
+        var parts = [s.voice];
+        if (s.model === 'eleven_v3') {
+            parts.push('v3 · ' + ({ 0: 'творчески', 0.5: 'естественно', 1: 'стабильно' }[s.stability] || s.stability));
+            if (s.tags) parts.push(s.tags);
+        } else {
+            parts.push(s.model.replace('eleven_', '').replace(/_/g, ' '));
+            parts.push('ровн. ' + (+s.stability).toFixed(2));
+            if (s.ctx) parts.push('с вопросом');
+        }
+        parts.push('арт. ' + (+s.style).toFixed(2));
+        parts.push((+s.speed).toFixed(2) + '×');
+        return parts.join(' · ');
+    }
+
+    function showSettings() {
+        document.body.classList.toggle('v3', isV3());
+        $('vStab').textContent = (+$('stab').value).toFixed(2);
+        $('vSim').textContent = (+$('sim').value).toFixed(2);
+        $('vStyle').textContent = (+$('style').value).toFixed(2);
+        $('vSpeed').textContent = (+$('speed').value).toFixed(2) + '×';
+        Array.prototype.forEach.call($('v3stab').children, function (b) {
+            b.classList.toggle('on', +b.dataset.v === v3stab);
+        });
+        remember();
+        paintQuota();
+    }
+
+    // текст, который уходит в модель
+    function phrase(key, s) {
+        var t = byKey[key].de + (s.dot ? '.' : '');
+        if (s.tags) t = s.tags + ' ' + t;
+        return t;
+    }
+
+    // ── UI: голоса, пробы, теги ─────────────────────────────
+    $('voice').innerHTML = Object.keys(VOICES).map(function (n) {
+        return '<option value="' + n + '">' + n + ' · ' + (FEM.indexOf(n) >= 0 ? 'ж' : 'м') + '</option>';
+    }).join('');
+    $('sampleKey').innerHTML = ITEMS.map(function (it) {
+        return '<option value="' + it.key + '">' + it.time + ' — ' + it.de + '</option>';
+    }).join('');
+    $('chips').innerHTML = TAGS.map(function (t) { return '<button type="button">' + t + '</button>'; }).join('');
+    $('chips').addEventListener('click', function (e) {
+        if (e.target.tagName !== 'BUTTON') return;
+        var tag = e.target.textContent;
+        var cur = $('tags').value.trim();
+        $('tags').value = cur.indexOf(tag) >= 0 ? cur.replace(tag, '').replace(/\s+/g, ' ').trim() : (cur + ' ' + tag).trim();
+        remember(); paintQuota();
+    });
+    $('v3stab').addEventListener('click', function (e) {
+        if (e.target.dataset.v === undefined) return;
+        v3stab = +e.target.dataset.v;
+        showSettings();
+    });
+    document.querySelectorAll('[data-preset]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var p = PRESETS[b.dataset.preset];
+            $('stab').value = p.stab; $('sim').value = p.sim;
+            $('style').value = p.style; $('speed').value = p.speed;
+            $('ctx').checked = p.ctx;
+            showSettings();
+        });
+    });
+    ['stab', 'sim', 'style', 'speed'].forEach(function (id) { $(id).addEventListener('input', showSettings); });
+    ['voice', 'model', 'v3', 'ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
+    $('tags').addEventListener('input', function () { remember(); paintQuota(); });
+
+    // сохранённые настройки или пресет «Живо»
+    (function restore() {
+        var sv = null;
+        try { sv = JSON.parse(localStorage.getItem('uhrzeit_voicegen') || 'null'); } catch (e) {}
+        if (!sv) {
+            var p = PRESETS.live;
+            $('stab').value = p.stab; $('sim').value = p.sim; $('style').value = p.style;
+            $('speed').value = p.speed; $('ctx').checked = p.ctx; $('dot').checked = true;
+            $('voice').value = 'Roger';
+            // по умолчанию — текущее время
+            var d = new Date();
+            $('sampleKey').value = voiceKey(d.getHours(), Math.floor(d.getMinutes() / 5) * 5);
+            return;
+        }
+        if (VOICES[sv.voice]) $('voice').value = sv.voice;
+        if (sv.model) $('model').value = sv.model;
+        $('v3').checked = !!sv.v3;
+        v3stab = sv.v3stab === undefined ? 0.5 : +sv.v3stab;
+        $('tags').value = sv.tags || '';
+        $('stab').value = sv.stab; $('sim').value = sv.sim; $('style').value = sv.style; $('speed').value = sv.speed;
+        $('ctx').checked = !!sv.ctx; $('dot').checked = sv.dot !== false;
+        if (sv.sample && byKey[sv.sample]) $('sampleKey').value = sv.sample;
+    })();
+    showSettings();
+
+    // ── вход ────────────────────────────────────────────────
+    function showLogin(msg) {
+        token = '';
+        ssSet('editor_token', null);
+        $('loginErr').textContent = msg || '';
+        $('login').style.display = 'flex';
+    }
+    var started = false;
+    function enter() {
+        $('login').style.display = 'none';
+        if (started) return;
+        started = true;
+        loadQuota();
+        loadMeta();
+        render();
+    }
+    async function doLogin() {
+        var pwd = $('pwd').value.trim();
+        if (!pwd) return;
+        busy($('btnLogin'), '…');
+        $('loginErr').textContent = '';
+        try {
+            var r = await fetch('/api/auth', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwd })
+            });
+            var d = await r.json();
+            if (d.ok && d.token) {
+                token = d.token;
+                ssSet('editor_token', token);   // общий вход с редактором
+                $('pwd').value = '';
+                enter();
+            } else {
+                $('loginErr').textContent = d.error || 'Неверный пароль';
+            }
+        } catch (e) {
+            $('loginErr').textContent = 'Ошибка соединения';
+        }
+        idle($('btnLogin'));
+    }
+    $('btnLogin').addEventListener('click', doLogin);
+    $('pwd').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+
+    function authError(d) {
+        if (d && d.code === 'auth') { showLogin('Сессия истекла — войдите снова. Озвученное не потеряно.'); return true; }
+        return false;
+    }
+
+    // ── лимит ───────────────────────────────────────────────
+    function needChars() {
+        var s = readSettings();
+        var redo = $('redo').checked;
+        return ITEMS.reduce(function (n, it) {
+            if (!redo && (onSite[it.key] || fresh[it.key] || committed[it.key])) return n;
+            return n + phrase(it.key, s).length;
+        }, 0);
+    }
+    async function loadQuota() {
+        $('qNums').textContent = 'загружаю…';
+        try {
+            var r = await fetch('/api/quota', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
+            var d = await r.json();
+            if (!r.ok) { if (authError(d)) return; throw new Error(d.error || ('HTTP ' + r.status)); }
+            quota = d;
+            paintQuota();
+        } catch (e) {
+            quota = null;
+            $('qNums').textContent = 'не удалось узнать: ' + e.message;
+        }
+    }
+    function paintQuota() {
+        if (!quota) return;
+        var need = needChars();
+        var fill = $('qFill');
+        fill.style.width = quota.percent + '%';
+        fill.className = quota.percent >= 90 ? 'crit' : quota.percent >= 70 ? 'warn' : '';
+        var mark = $('qNeed');
+        if (need > 0 && quota.limit) {
+            mark.style.display = 'block';
+            mark.style.left = quota.percent + '%';
+            mark.style.width = Math.min(100 - quota.percent, need / quota.limit * 100) + '%';
+        } else {
+            mark.style.display = 'none';
+        }
+        var when = '';
+        if (quota.resetUnix) {
+            var dt = new Date(quota.resetUnix * 1000);
+            var days = Math.max(0, Math.ceil((dt - Date.now()) / 864e5));
+            when = ' · обновится ' + dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ' (через ' + days + ' дн.)';
+        }
+        $('qTitle').textContent = 'Лимит ElevenLabs · ' + quota.percent + '%';
+        $('qNums').innerHTML = 'осталось <b>' + nf(quota.left) + '</b> из ' + nf(quota.limit) +
+            ' · ' + quota.tier + when + '<br>' +
+            (need > 0
+                ? 'на озвучку нужно <b>' + nf(need) + '</b> символов — ' +
+                  (need <= quota.left ? 'хватает' : '<b style="color:#cc2244">не хватает ' + nf(need - quota.left) + '</b>')
+                : 'всё уже озвучено') +
+            '<br>одна проба ≈ ' + phrase($('sampleKey').value, readSettings()).length + ' симв.';
+    }
+    $('qRefresh').addEventListener('click', loadQuota);
+    $('redo').addEventListener('change', paintQuota);
+
+    // ── генерация ───────────────────────────────────────────
+    async function speak(key, s) {
+        var r = await fetch('/api/speak', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token: token,
+                text: phrase(key, s),
+                voiceId: VOICES[s.voice],
+                modelId: s.model,
+                voiceSettings: {
+                    stability: s.stability, similarity_boost: s.similarity_boost,
+                    style: s.style, speed: s.speed, use_speaker_boost: true
+                },
+                previousText: s.ctx ? CTX_BEFORE : undefined
+            })
+        });
+        var d = await r.json().catch(function () { return {}; });
+        if (!r.ok) {
+            if (authError(d)) { var e = new Error('auth'); e.auth = true; throw e; }
+            throw new Error((d.error || ('HTTP ' + r.status)) + (d.details ? ' — ' + d.details : ''));
+        }
+        return d.audio;
+    }
+
+    var player = new Audio();
+    var lastUrl = null;
+    function playB64(b64) {
+        var bytes = Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0); });
+        if (lastUrl) URL.revokeObjectURL(lastUrl);
+        lastUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+        player.src = lastUrl;
+        player.play().catch(function () {});
+    }
+    function playSite(key) {
+        player.src = DIR + key + '.mp3?t=' + Date.now();
+        player.play().catch(function () { log('не удалось проиграть ' + key + '.mp3', 'err'); });
+    }
+
+    // ── пробы ───────────────────────────────────────────────
+    var takes = [];
+    $('btnSample').addEventListener('click', async function () {
+        var key = $('sampleKey').value;
+        var s = readSettings();
+        busy($('btnSample'), 'генерирую…');
+        try {
+            var audio = await speak(key, s);
+            takes.unshift({ key: key, s: s, audio: audio });
+            playB64(audio);
+            renderTakes();
+            setTimeout(loadQuota, 800);
+        } catch (e) {
+            if (!e.auth) log('проба не вышла: ' + e.message, 'err');
+        }
+        idle($('btnSample'));
+    });
+    function renderTakes() {
+        $('takes').innerHTML = takes.map(function (t, i) {
+            return '<div class="take' + (t.s.model === 'eleven_v3' ? ' v3' : '') + '">' +
+                '<button class="ib" data-play="' + i + '">▶</button>' +
+                '<div class="lbl"><b>' + byKey[t.key].time + '</b> ' + escapeHtml(byKey[t.key].de) +
+                '<small>' + escapeHtml(describe(t.s)) + '</small></div>' +
+                '<button class="ib" data-use="' + i + '" title="Вернуть эти настройки">⤴</button>' +
+                '<button class="ib red" data-del="' + i + '" title="Убрать">✕</button></div>';
+        }).join('');
+    }
+    $('takes').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.play !== undefined) playB64(takes[+b.dataset.play].audio);
+        if (b.dataset.use !== undefined) { applySettings(takes[+b.dataset.use].s); log('настройки пробы возвращены', 'ok'); }
+        if (b.dataset.del !== undefined) { takes.splice(+b.dataset.del, 1); renderTakes(); }
+    });
+    function escapeHtml(t) {
+        return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+    }
+
+    // ── что уже есть на сайте ───────────────────────────────
+    async function loadMeta() {
+        try {
+            var r = await fetch(DIR + 'voice.json', { cache: 'no-store' });
+            if (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0) {
+                var d = await r.json();
+                if (d && d.files) { meta = d; render(); }
+            }
+        } catch (e) {}
+    }
+    async function exists(key) {
+        try {
+            var r = await fetch(DIR + key + '.mp3', { method: 'HEAD', cache: 'no-store' });
+            var ct = r.headers.get('content-type') || '';
+            return r.ok && (ct.indexOf('audio') >= 0 || ct.indexOf('octet-stream') >= 0);
+        } catch (e) { return false; }
+    }
+    $('btnCheck').addEventListener('click', async function () {
+        busy($('btnCheck'), 'проверяю…');
+        var queue = ITEMS.slice(), n = 0, have = 0;
+        async function worker() {
+            while (queue.length) {
+                var it = queue.shift();
+                if (await exists(it.key)) { onSite[it.key] = true; have++; } else { delete onSite[it.key]; }
+                n++;
+                $('fill').style.width = (n / ITEMS.length * 100) + '%';
+                $('btnCheck').textContent = 'проверяю… ' + n + ' / ' + ITEMS.length;
+            }
+        }
+        await Promise.all([worker(), worker(), worker(), worker()]);
+        await loadMeta();
+        render();
+        paintQuota();
+        log('на сайте есть ' + have + ' из ' + ITEMS.length + ', не хватает ' + (ITEMS.length - have),
+            have === ITEMS.length ? 'ok' : 'new');
+        idle($('btnCheck'));
+    });
+
+    // ── озвучка всех недостающих ────────────────────────────
+    var stopFlag = false;
+    async function genOne(key, s) {
+        try {
+            fresh[key] = { audio: await speak(key, s), s: s };
+            return true;
+        } catch (e) {
+            if (e.auth) throw e;
+            await sleep(1500);   // чаще всего 429 — просто подождать
+            try {
+                fresh[key] = { audio: await speak(key, s), s: s };
+                log('↻ ' + byKey[key].time + ' — со второй попытки', 'new');
+                return true;
+            } catch (e2) {
+                if (e2.auth) throw e2;
+                log('✗ ' + byKey[key].time + ' — ' + e2.message, 'err');
+                return false;
+            }
+        }
+    }
+    $('btnGen').addEventListener('click', async function () {
+        if ($('btnGen').dataset.running) { stopFlag = true; return; }
+        var redo = $('redo').checked;
+        var todo = ITEMS.filter(function (it) {
+            return redo || (!onSite[it.key] && !fresh[it.key] && !committed[it.key]);
+        });
+        if (!todo.length) { log('нечего озвучивать — всё уже есть', 'ok'); return; }
+        if (!Object.keys(onSite).length && !redo &&
+            !confirm('Проверка «что уже есть» ещё не запускалась — озвучить все ' + todo.length + ' фраз?')) return;
+
+        var s = readSettings();
+        var ok = 0, bad = 0, n = 0;
+        stopFlag = false;
+        $('btnGen').dataset.running = '1';
+        render();
+        $('btnGen').textContent = '■ Остановить';
+        try {
+            for (var i = 0; i < todo.length; i++) {
+                if (stopFlag) { log('остановлено', 'err'); break; }
+                if (await genOne(todo[i].key, s)) ok++; else bad++;
+                n++;
+                $('fill').style.width = (n / todo.length * 100) + '%';
+                $('btnGen').textContent = '■ Остановить · ' + n + ' / ' + todo.length;
+                if (n % 6 === 0) render();
+                await sleep(250);
+            }
+        } catch (e) { /* сессия истекла — окно входа уже открыто */ }
+        delete $('btnGen').dataset.running;
+        $('btnGen').textContent = $('btnGen').dataset.label || '2 · Озвучить недостающие';
+        render();
+        loadQuota();
+        log('озвучено ' + ok + (bad ? ', ошибок ' + bad : '') + ' — послушай и запиши коммитом', bad ? 'err' : 'ok');
+    });
+    $('btnGen').dataset.label = $('btnGen').textContent;
+
+    // ↻ одной фразы и ▶ в списке
+    $('list').addEventListener('click', async function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        var key = b.dataset.key;
+        if (b.dataset.act === 'site') playSite(key);
+        if (b.dataset.act === 'fresh') playB64((fresh[key] || committed[key]).audio);
+        if (b.dataset.act === 'redo') {
+            b.disabled = true; b.textContent = '…';
+            try {
+                if (await genOne(key, readSettings())) { playB64(fresh[key].audio); log('↻ ' + byKey[key].time + ' переозвучено', 'new'); }
+            } catch (err) {}
+            render();
+            loadQuota();
+        }
+        if (b.dataset.act === 'drop') { delete fresh[key]; render(); }
+    });
+
+    // ── коммит ──────────────────────────────────────────────
+    function b64utf8(str) { return btoa(unescape(encodeURIComponent(str))); }
+
+    async function postCommit(body) {
+        body.token = token;
+        var r = await fetch('/api/commit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        var d = await r.json().catch(function () { return {}; });
+        if (!r.ok) {
+            if (authError(d)) { var e = new Error('auth'); e.auth = true; throw e; }
+            throw new Error((d.error || ('HTTP ' + r.status)) + (d.details ? ' — ' + d.details : ''));
+        }
+        return d;
+    }
+
+    $('btnPub').addEventListener('click', async function () {
+        var keys = Object.keys(fresh);
+        if (!keys.length) return;
+        busy($('btnPub'), 'заливаю…');
+        try {
+            // метаданные: какими настройками записана каждая фраза
+            var m = JSON.parse(JSON.stringify(meta || { files: {} }));
+            m.files = m.files || {};
+            keys.forEach(function (k) {
+                var s = fresh[k].s;
+                m.files[k] = { text: phrase(k, s), voice: s.voice, model: s.model, stability: s.stability,
+                               similarity: s.similarity_boost, style: s.style, speed: s.speed,
+                               ctx: s.ctx, date: new Date().toISOString().slice(0, 10) };
+            });
+            m.updated = new Date().toISOString();
+            var files = keys.map(function (k) { return { path: DIR + k + '.mp3', content: fresh[k].audio }; });
+            files.push({ path: DIR + 'voice.json', content: b64utf8(JSON.stringify(m, null, 1)) });
+
+            // пачки до ~3 МБ — лимит запроса Vercel 4,5 МБ
+            var batches = [], cur = [], size = 0;
+            files.forEach(function (f) {
+                if (cur.length && (size + f.content.length > 3e6 || cur.length >= 40)) { batches.push(cur); cur = []; size = 0; }
+                cur.push(f); size += f.content.length;
+            });
+            if (cur.length) batches.push(cur);
+
+            var tree = [], failed = [];
+            for (var i = 0; i < batches.length; i++) {
+                $('btnPub').textContent = 'заливаю… ' + (i + 1) + ' / ' + batches.length;
+                $('fill').style.width = ((i + 1) / (batches.length + 1) * 100) + '%';
+                var d = await postCommit({ action: 'blobs', files: batches[i] });
+                tree = tree.concat(d.blobs);
+                failed = failed.concat(d.failed || []);
+            }
+            if (failed.length) {
+                log('не залились: ' + failed.map(function (f) { return f.path.split('/').pop(); }).join(', ') +
+                    ' — они останутся в «новых», повтори коммит', 'err');
+            }
+            var okKeys = tree.map(function (t) { return t.path.split('/').pop().replace('.mp3', ''); })
+                             .filter(function (k) { return fresh[k]; });
+            if (!okKeys.length) throw new Error('ни один файл не залился');
+            // voice.json пишем, только если он долетел
+            tree = tree.filter(function (t) { return /voice\.json$/.test(t.path) || okKeys.indexOf(t.path.split('/').pop().replace('.mp3', '')) >= 0; });
+
+            $('btnPub').textContent = 'коммит…';
+            var c;
+            try {
+                c = await postCommit({ action: 'commit', tree: tree, message: 'Озвучка времени: ' + okKeys.length + ' фраз' });
+            } catch (e) {
+                if (e.auth) throw e;
+                await sleep(1500);   // ветка могла уйти вперёд — одна повторная попытка
+                c = await postCommit({ action: 'commit', tree: tree, message: 'Озвучка времени: ' + okKeys.length + ' фраз' });
+            }
+            okKeys.forEach(function (k) { committed[k] = fresh[k]; delete fresh[k]; });
+            meta = m;
+            $('fill').style.width = '100%';
+            log('записано одним коммитом: ' + okKeys.length + ' фраз (' + c.commit.slice(0, 7) + '). Через ~1 мин появятся на сайте.', 'ok');
+        } catch (e) {
+            if (!e.auth) log('коммит не вышел: ' + e.message, 'err');
+        }
+        idle($('btnPub'));
+        render();
+    });
+
+    // ── список ──────────────────────────────────────────────
+    $('filters').addEventListener('click', function (e) {
+        if (!e.target.dataset.f) return;
+        filter = e.target.dataset.f;
+        Array.prototype.forEach.call($('filters').children, function (b) { b.classList.toggle('on', b === e.target); });
+        render();
+    });
+
+    function state(key) {
+        if (fresh[key]) return 'fresh';
+        if (committed[key]) return 'done';
+        if (onSite[key]) return 'have';
+        return 'miss';
+    }
+
+    function render() {
+        var nFresh = Object.keys(fresh).length;
+        // пока идёт озвучка, коммит недоступен — иначе запишется половина
+        $('btnPub').disabled = !nFresh || !!$('btnGen').dataset.running;
+        $('btnPub').textContent = nFresh ? '3 · Записать одним коммитом (' + nFresh + ')' : '3 · Записать одним коммитом';
+        $('btnPub').dataset.label = $('btnPub').textContent;
+
+        var html = '';
+        ITEMS.forEach(function (it) {
+            var st = state(it.key);
+            if (filter !== 'all' && !(filter === st || (filter === 'have' && st === 'done'))) return;
+            var info = fresh[it.key] ? describe(fresh[it.key].s)
+                     : (meta.files && meta.files[it.key]) ? describe({
+                           voice: meta.files[it.key].voice, model: meta.files[it.key].model,
+                           stability: meta.files[it.key].stability, style: meta.files[it.key].style,
+                           speed: meta.files[it.key].speed, ctx: meta.files[it.key].ctx,
+                           tags: (meta.files[it.key].text || '').match(/^(\[[^\]]+\]\s*)+/) ? meta.files[it.key].text.match(/^(\[[^\]]+\]\s*)+/)[0].trim() : ''
+                       })
+                     : '';
+            var label = { have: 'есть', fresh: 'новое', miss: 'нет', done: 'записано' }[st];
+            html += '<div class="item">' +
+                '<span class="tm">' + it.time + '</span>' +
+                '<span class="ph">' + escapeHtml(it.de) + (info ? '<small>' + escapeHtml(info) + '</small>' : '') + '</span>' +
+                '<span class="st ' + st + '">' + label + '</span>' +
+                (st === 'have' ? '<button class="ib site" data-act="site" data-key="' + it.key + '" title="Файл на сайте">▶</button>' : '') +
+                (st === 'fresh' || st === 'done' ? '<button class="ib" data-act="fresh" data-key="' + it.key + '" title="Новая запись">▶</button>' : '') +
+                '<button class="ib" data-act="redo" data-key="' + it.key + '" title="Переозвучить текущими настройками">↻</button>' +
+                (st === 'fresh' ? '<button class="ib red" data-act="drop" data-key="' + it.key + '" title="Отбросить">✕</button>' : '') +
+                '</div>';
+        });
+        $('list').innerHTML = html || '<div class="hint" style="padding:10px 0">Пусто</div>';
+    }
+
+    window.addEventListener('beforeunload', function (e) {
+        if (Object.keys(fresh).length) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    // ── старт ───────────────────────────────────────────────
+    token = ssGet('editor_token') || '';
+    if (token) enter();
+    render();
+})();
+</script>
+<script src="install.js"></script>
+<script src="console.js"></script>
+</body>
+</html>

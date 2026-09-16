@@ -67,9 +67,13 @@
     .seg button.on { background: var(--v3); color: #fff; }
     .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
     .chips button {
-        width: auto; margin: 0; padding: 5px 9px; font-size: 12px; border-radius: 14px;
-        background: #f3e9f7; color: var(--v3);
+        width: auto; margin: 0; padding: 7px 11px; font-size: 13px; border-radius: 16px;
+        background: #f3e9f7; color: var(--v3); border: 1px solid transparent;
     }
+    .chips button.on { background: var(--v3); color: #fff; }
+    details.code { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    details.code summary { cursor: pointer; }
+    details.code input { margin-top: 6px; font-family: monospace; font-size: 13px; }
 
     /* лимит */
     .qbar { position: relative; height: 10px; background: #e6e9ef; border-radius: 5px; overflow: hidden; margin: 6px 0; }
@@ -174,7 +178,7 @@
         <div class="switch">
             <div>
                 <div class="t">Eleven v3 — эмоции</div>
-                <div class="hint">Теги вроде [cheerful]; другие правила настроек</div>
+                <div class="hint">Можно задать настроение голоса; свои правила настроек</div>
             </div>
             <input type="checkbox" id="v3">
         </div>
@@ -186,9 +190,14 @@
                 <button data-v="0.5">Естественно</button>
                 <button data-v="1">Стабильно</button>
             </div>
-            <label>Теги перед фразой <span class="hint">читаются как указание, вслух не звучат</span></label>
-            <input type="text" id="tags" placeholder="[cheerful]">
+            <label>Настроение <span class="hint">можно выбрать несколько или ни одного</span></label>
             <div class="chips" id="chips"></div>
+            <div class="hint" id="moodNow" style="margin-top:6px"></div>
+            <details class="code">
+                <summary>Код для модели (для своих вариантов)</summary>
+                <input type="text" id="tags" placeholder="[cheerful]">
+                <div style="margin-top:4px">Модель видит английские подсказки в квадратных скобках перед фразой и сама их не произносит. Можно дописать свою, например <code>[proudly]</code>.</div>
+            </details>
         </div>
     </div>
 
@@ -274,7 +283,27 @@
     var FEM = ['Laura', 'Matilda', 'Jessica', 'Lily'];
     var DIR = 'voice/de/uhr/';
     var CTX_BEFORE = 'Entschuldigung, wie spät ist es?';
-    var TAGS = ['[cheerful]', '[warmly]', '[friendly]', '[calm]', '[excited]', '[playfully]', '[confident]'];
+    // Настроение для v3: на кнопке — понятное название, в модель уходит код
+    var TAGS = [
+        { code: '[cheerful]',  label: '😊 Весело' },
+        { code: '[warmly]',    label: '🤗 Тепло' },
+        { code: '[friendly]',  label: '🙂 Дружелюбно' },
+        { code: '[calm]',      label: '😌 Спокойно' },
+        { code: '[excited]',   label: '🤩 Восторженно' },
+        { code: '[playfully]', label: '😜 Игриво' },
+        { code: '[confident]', label: '💪 Уверенно' },
+        { code: '[softly]',    label: '🪶 Мягко' },
+        { code: '[whispers]',  label: '🤫 Шёпотом' },
+        { code: '[curious]',   label: '🤔 С интересом' }
+    ];
+    var TAG_LABEL = {};
+    TAGS.forEach(function (t) { TAG_LABEL[t.code] = t.label; });
+
+    // «[cheerful] [calm]» → «😊 Весело + 😌 Спокойно»; незнакомый код показываем как есть
+    function tagsText(code) {
+        var list = String(code || '').match(/\[[^\]]+\]/g) || [];
+        return list.map(function (c) { return TAG_LABEL[c.toLowerCase()] || c; }).join(' + ');
+    }
     var PRESETS = {
         flat: { stab: 0.8,  sim: 0.8,  style: 0,    speed: 0.92, ctx: true },
         live: { stab: 0.45, sim: 0.75, style: 0.15, speed: 1,    ctx: true },
@@ -359,7 +388,7 @@
         if (s.voice && VOICES[s.voice]) $('voice').value = s.voice;
         var v3 = s.model === 'eleven_v3';
         $('v3').checked = v3;
-        if (v3) { v3stab = s.stability; $('tags').value = s.tags || ''; }
+        if (v3) { v3stab = s.stability; $('tags').value = s.tags || ''; paintChips(); }
         else {
             $('model').value = s.model;
             $('stab').value = s.stability;
@@ -376,7 +405,7 @@
         var parts = [s.voice];
         if (s.model === 'eleven_v3') {
             parts.push('v3 · ' + ({ 0: 'творчески', 0.5: 'естественно', 1: 'стабильно' }[s.stability] || s.stability));
-            if (s.tags) parts.push(s.tags);
+            if (s.tags) parts.push(tagsText(s.tags));
         } else {
             parts.push(s.model.replace('eleven_', '').replace(/_/g, ' '));
             parts.push('ровн. ' + (+s.stability).toFixed(2));
@@ -396,6 +425,7 @@
         Array.prototype.forEach.call($('v3stab').children, function (b) {
             b.classList.toggle('on', +b.dataset.v === v3stab);
         });
+        paintChips();
         remember();
         paintQuota();
     }
@@ -414,13 +444,27 @@
     $('sampleKey').innerHTML = ITEMS.map(function (it) {
         return '<option value="' + it.key + '">' + it.time + ' — ' + it.de + '</option>';
     }).join('');
-    $('chips').innerHTML = TAGS.map(function (t) { return '<button type="button">' + t + '</button>'; }).join('');
+    $('chips').innerHTML = TAGS.map(function (t) {
+        return '<button type="button" data-code="' + t.code + '">' + t.label + '</button>';
+    }).join('');
+    // подсветка кнопок и строка «Сейчас: …» по содержимому поля кода
+    function paintChips() {
+        var cur = $('tags').value.toLowerCase();
+        Array.prototype.forEach.call($('chips').children, function (b) {
+            b.classList.toggle('on', cur.indexOf(b.dataset.code) >= 0);
+        });
+        var txt = tagsText($('tags').value);
+        $('moodNow').textContent = txt ? 'Сейчас: ' + txt : 'Сейчас: без настроения — обычное чтение';
+    }
     $('chips').addEventListener('click', function (e) {
-        if (e.target.tagName !== 'BUTTON') return;
-        var tag = e.target.textContent;
+        var b = e.target.closest('button');
+        if (!b) return;
+        var tag = b.dataset.code;
         var cur = $('tags').value.trim();
-        $('tags').value = cur.indexOf(tag) >= 0 ? cur.replace(tag, '').replace(/\s+/g, ' ').trim() : (cur + ' ' + tag).trim();
-        remember(); paintQuota();
+        $('tags').value = cur.toLowerCase().indexOf(tag) >= 0
+            ? cur.replace(new RegExp(tag.replace(/[\[\]]/g, '\\$&'), 'i'), '').replace(/\s+/g, ' ').trim()
+            : (cur + ' ' + tag).trim();
+        paintChips(); remember(); paintQuota();
     });
     $('v3stab').addEventListener('click', function (e) {
         if (e.target.dataset.v === undefined) return;
@@ -438,7 +482,7 @@
     });
     ['stab', 'sim', 'style', 'speed'].forEach(function (id) { $(id).addEventListener('input', showSettings); });
     ['voice', 'model', 'v3', 'ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
-    $('tags').addEventListener('input', function () { remember(); paintQuota(); });
+    $('tags').addEventListener('input', function () { paintChips(); remember(); paintQuota(); });
 
     // сохранённые настройки или пресет «Живо»
     (function restore() {

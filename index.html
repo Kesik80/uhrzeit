@@ -1,17 +1,15 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="auto">
+<html lang="de">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="LaundryAI">
-<meta id="themeColorMeta" name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-title" content="Uhrzeit">
+<meta id="themeColorMeta" name="theme-color" content="#ffffff">
 <link rel="manifest" href="/icons/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <title>Wie spät ist es?</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -84,6 +82,12 @@
         #clock-ru {
             font-size: clamp(14px, 4.2vw, 20px);
             color: var(--clock-ru);
+        }
+
+        #clock-exact {
+            font-size: clamp(12px, 3.6vw, 16px);
+            color: var(--hint);
+            text-align: center;
             text-align: center;
         }
 
@@ -105,10 +109,12 @@
             color: var(--hint);
             text-align: center;
         }
+        #digitalClock.paused { opacity: 0.6; }
+
         #btnTheme {
             position: fixed;
-            top: 10px;
-            right: 12px;
+            top: calc(10px + env(safe-area-inset-top, 0px));
+            right: calc(12px + env(safe-area-inset-right, 0px));
             background: none;
             border: none;
             font-size: 22px;
@@ -168,11 +174,12 @@
             background:none;border:none;cursor:pointer;font-size:clamp(18px,5vw,24px);
             padding:2px 4px;opacity:0.7;line-height:1;display:none">🔊</button>
     </div>
+    <div id="clock-exact"> </div>
     <div id="clock-ru"> </div>
     <div class="canvas-wrap">
         <canvas id="myCanvas"></canvas>
     </div>
-    <p class="hint" id="hintText" style="text-align:center;font-size:clamp(10px,3vw,13px);color:#999">Нажмите на циферблат — остановите стрелки и меняйте время</p>
+    <p class="hint" id="hintText">Нажмите на циферблат — остановите стрелки и меняйте время</p>
     <div style="position:relative;width:180px;height:48px;margin:4px auto">
         <button class="game-btn" id="btnStart" onclick="startGame()" style="position:absolute;inset:0;width:100%">▶ Играть</button>
         <button class="game-btn" id="btnStop"  onclick="stopGame()" style="position:absolute;inset:0;width:100%;visibility:hidden">■ Стоп</button>
@@ -206,7 +213,7 @@
         🔊 Авто-звук
     </label>
 
-    <a href="editor.html" id="editorLink" style="font-size:11px;color:#999;text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
+    <a href="editor.html" id="editorLink" style="font-size:11px;color:var(--hint);text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
 
 <script>
     var hour   = 0;
@@ -223,14 +230,15 @@
     var clockCenterX, clockCenterY, clockRadius, numbersRadius;
 
     // ─── Настройки из GitHub ──────────────────────────────────────────────────
-    var _settingsSha = null; // sha нужен для обновления файла
 
     async function loadSettingsFromGitHub() {
         try {
-            var r = await fetch('/api/load-settings');
+            var ctrl  = ('AbortController' in window) ? new AbortController() : null;
+            var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, 8000) : null;
+            var r = await fetch('/api/load-settings', ctrl ? { signal: ctrl.signal } : {});
+            if (timer) clearTimeout(timer);
             var data = await r.json();
             if (data.ok && data.settings) {
-                _settingsSha = data.sha || null;
                 return data.settings;
             }
         } catch(e) {}
@@ -261,9 +269,10 @@
         const wrap = canvas.parentElement;
         const w = wrap.clientWidth;
         const h = Math.round(w * ORIG_H / ORIG_W);
-        // Размер canvas через атрибуты (логические пиксели)
-        canvas.width  = w;
-        canvas.height = h;
+        // Буфер канваса в физических пикселях — чёткость на HiDPI (Xiaomi ≈ 3x)
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width  = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
         // CSS-размер = тот же, чтобы не было масштабирования браузером
         canvas.style.width  = w + 'px';
         canvas.style.height = h + 'px';
@@ -280,8 +289,18 @@
     function scale() { return canvas.width / ORIG_W; }
 
     // ─── DIGITAL CLOCK ───────────────────────────────────────────────────────
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
     function updateDigitalClock() {
         if (isGameMode) return; // во время игры не перезаписываем
+        const el = document.getElementById('digitalClock');
+        if (isClockPaused) {
+            // На паузе показываем выставленное пальцем время, а не реальное
+            el.textContent = pad2(hour) + ':' + pad2(minute) + ' ⏸';
+            el.classList.add('paused');
+            return;
+        }
+        el.classList.remove('paused');
         const now = new Date();
         const h = String(now.getHours()).padStart(2, '0');
         const m = String(now.getMinutes()).padStart(2, '0');
@@ -297,17 +316,21 @@
     updateDigitalClock();
 
     // ─── START / STOP ────────────────────────────────────────────────────────
+    function tick() {
+        var d  = new Date();
+        hour   = d.getHours();
+        minute = d.getMinutes();
+        second = d.getSeconds();
+        displayCanvas();
+        showGermanTime();
+    }
+
     function startClock() {
+        if (isGameMode) return;          // таймер простоя не должен запускать часы посреди игры
         if (!clockInterval) {
-            clockInterval = setInterval(function () {
-                var d  = new Date();
-                hour   = d.getHours();
-                minute = d.getMinutes();
-                second = d.getSeconds();
-                displayCanvas();
-                showGermanTime();
-            }, 1000);
             isClockPaused = false;
+            tick();                      // сразу, без секундной задержки
+            clockInterval = setInterval(tick, 1000);
         }
     }
 
@@ -324,91 +347,121 @@
         idleTimeout = setTimeout(startClock, 30000);
     }
 
-    // ─── GERMAN TIME LOGIC (исправленная) ────────────────────────────────────
-    var hoursDe = ['zwölf','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf'];
-
+    // ─── ВРЕМЯ СЛОВАМИ (DE / RU) ──────────────────────────────────────────────
     // Фразы для шагов 0..11 (каждые 5 минут)
     var phrasesDe = [
-        '',              // 0  — «X Uhr»
-        'fünf nach',     // 5
-        'zehn nach',     // 10
-        'Viertel nach',  // 15
-        'zwanzig nach',  // 20
-        'fünf vor halb', // 25
-        'halb',          // 30
-        'fünf nach halb',// 35
-        'zwanzig vor',   // 40
-        'Viertel vor',   // 45
-        'zehn vor',      // 50
-        'fünf vor',      // 55
+        '',               // 0  — «X Uhr»
+        'fünf nach',      // 5
+        'zehn nach',      // 10
+        'Viertel nach',   // 15
+        'zwanzig nach',   // 20
+        'fünf vor halb',  // 25  → следующий час
+        'halb',           // 30  → следующий час
+        'fünf nach halb', // 35  → следующий час
+        'zwanzig vor',    // 40  → следующий час
+        'Viertel vor',    // 45
+        'zehn vor',       // 50
+        'fünf vor',       // 55
     ];
 
-    // Русский: родительный (5–35 мин) — «пять минут ПЕРВОГО»
-    var hoursRuGen = ['двенадцатого','первого','второго','третьего','четвёртого','пятого','шестого','седьмого','восьмого','девятого','десятого','одиннадцатого'];
-    // Русский: именительный — для «ровно» и «без»
-    var hoursRuNom = ['двенадцать','час','два','три','четыре','пять','шесть','семь','восемь','девять','десять','одиннадцать'];
+    var ONES_DE = ['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun',
+                   'zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'];
+    var TENS_DE = ['','','zwanzig','dreißig','vierzig','fünfzig'];
+
+    function numDe(n) {
+        if (n < 20) return ONES_DE[n];
+        var t = Math.floor(n / 10), o = n % 10;
+        if (!o) return TENS_DE[t];
+        return (o === 1 ? 'ein' : ONES_DE[o]) + 'und' + TENS_DE[t];
+    }
+
+    // Час по-немецки (0 → zwölf). Перед «Uhr» — «ein», а не «eins»
+    function hourDe(h12, beforeUhr) {
+        if (h12 === 0) return 'zwölf';
+        if (h12 === 1) return beforeUhr ? 'ein' : 'eins';
+        return ONES_DE[h12];
+    }
+
+    // Официальное время: «zweiundzwanzig Uhr dreiundzwanzig»
+    function officialDe(h, m) {
+        return (h === 1 ? 'ein' : numDe(h)) + ' Uhr' + (m ? ' ' + numDe(m) : '');
+    }
+
+    // Русский: «пять минут ПЕРВОГО» — порядковое, родительный, СЛЕДУЮЩИЙ час
+    var hoursRuGen = ['двенадцатого','первого','второго','третьего','четвёртого','пятого',
+                      'шестого','седьмого','восьмого','девятого','десятого','одиннадцатого'];
+    // Именительный — для «ровно …» и «без пяти ДВА / без четверти ЧАС»
+    var hoursRuNom = ['двенадцать','час','два','три','четыре','пять',
+                      'шесть','семь','восемь','девять','десять','одиннадцать'];
 
     var phrasesRu = [
-        '',                    // 0  — ровно
-        'пять минут',          // 5
-        'десять минут',        // 10
-        'четверть',            // 15
-        'двадцать минут',      // 20
-        'двадцать пять минут', // 25
-        'половина',            // 30
-        'тридцать пять минут', // 35
-        'без двадцати',        // 40
-        'без четверти',        // 45
-        'без десяти',          // 50
-        'без пяти',            // 55
+        '',
+        'пять минут',
+        'десять минут',
+        'четверть',
+        'двадцать минут',
+        'двадцать пять минут',
+        'половина',
+        'тридцать пять минут',
+        'без двадцати',
+        'без четверти',
+        'без десяти',
+        'без пяти',
     ];
 
-    function hourForm(h) {
-        if (h === 1) return '';          // «Ровно час»
-        if (h >= 2 && h <= 4) return 'часа';
-        return 'часов';
+    function hourFormRu(h12) {
+        if (h12 === 1) return '';                 // «ровно час»
+        if (h12 >= 2 && h12 <= 4) return 'часа';
+        return 'часов';                           // 5–12
+    }
+
+    function capFirst(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+
+    // Возвращает { de, ru } — разговорный вариант с округлением до 5 минут
+    function timeInWords(h24, m) {
+        var step   = Math.round(m / 5);           // 0..12
+        var approx = (m % 5 !== 0);
+        var early  = approx && (step * 5 > m);    // округлили вверх → «gleich»
+        var base   = h24 % 12;
+        if (step === 12) { step = 0; base = (base + 1) % 12; }  // 58–59 → следующий час
+        var next = (base + 1) % 12;
+
+        var de, ru;
+        if (step === 0) {
+            de = approx ? hourDe(base, false) : hourDe(base, true) + ' Uhr';
+            var hf = hourFormRu(base);
+            ru = (approx ? '' : 'ровно ') + hoursRuNom[base] + (hf ? ' ' + hf : '');
+        } else if (step <= 4) {                   // 5–20: nach + ТЕКУЩИЙ час
+            de = phrasesDe[step] + ' ' + hourDe(base, false);
+            ru = phrasesRu[step] + ' ' + hoursRuGen[next];
+        } else if (step <= 7) {                   // 25–35: …halb + СЛЕДУЮЩИЙ час
+            de = phrasesDe[step] + ' ' + hourDe(next, false);
+            ru = phrasesRu[step] + ' ' + hoursRuGen[next];
+        } else {                                  // 40–55: vor / без + СЛЕДУЮЩИЙ час
+            de = phrasesDe[step] + ' ' + hourDe(next, false);
+            ru = phrasesRu[step] + ' ' + hoursRuNom[next];
+        }
+
+        if (approx) {
+            de = 'Es ist ' + (early ? 'gleich ' : 'kurz nach ') + de;
+            ru = '≈ ' + ru;
+        } else {
+            de = 'Es ist ' + de;
+            ru = capFirst(ru);
+        }
+        return { de: de, ru: ru };
     }
 
     function showGermanTime() {
-        var h12 = hour % 12;
-        var m   = minute;
-        var textDe, textRu;
+        var w = timeInWords(hour, minute);
+        // В игре часы 12-часовые (как на табло) → «zwölf Uhr fünfzehn», а не «null Uhr …»
+        var hOff = isGameMode ? (hour % 12 || 12) : hour;
 
-        var mStep = Math.floor((m + 2) / 5); // +2 для округления к ближайшим 5
-        if (mStep >= 12) mStep = 11;          // 58-59 мин → mStep=11 («fünf vor»)
+        document.getElementById('clock').textContent       = w.de;
+        document.getElementById('clock-exact').textContent = 'offiziell: ' + officialDe(hOff, minute);
+        document.getElementById('clock-ru').textContent    = w.ru;
+        updateDigitalClock();
 
-        // --- НЕМЕЦКИЙ ---
-        if (mStep === 0) {
-            textDe = 'Es ist ' + hoursDe[h12] + ' Uhr';
-        } else if (mStep >= 1 && mStep <= 5) {
-            textDe = 'Es ist ' + phrasesDe[mStep] + ' ' + hoursDe[h12];
-        } else if (mStep === 6) {
-            textDe = 'Es ist halb ' + hoursDe[(h12 + 1) % 12];
-        } else if (mStep === 7) {
-            textDe = 'Es ist fünf nach halb ' + hoursDe[(h12 + 1) % 12];
-        } else {
-            textDe = 'Es ist ' + phrasesDe[mStep] + ' ' + hoursDe[(h12 + 1) % 12];
-        }
-
-        // --- РУССКИЙ ---
-        if (mStep === 0) {
-            // Ровно: «Ровно час», «Ровно два часа», «Ровно двенадцать часов»
-            var hf = hourForm(h12);
-            textRu = 'Ровно ' + hoursRuNom[h12] + (hf ? ' ' + hf : '');
-
-        } else if (mStep >= 1 && mStep <= 7) {
-            // 5–35 мин → родительный СЛЕДУЮЩЕГО часа
-            // «5 минут девятого», «половина девятого», «35 минут девятого»
-            textRu = phrasesRu[mStep] + ' ' + hoursRuGen[(h12 + 1) % 12];
-
-        } else {
-            // 40–55 мин → «Без ... + именительный СЛЕДУЮЩЕГО»
-            // «Без двадцати час», «Без двадцати два», «Без двадцати двенадцать»
-            textRu = phrasesRu[mStep] + ' ' + hoursRuNom[(h12 + 1) % 12];
-        }
-
-        document.getElementById('clock').textContent    = textDe;
-        document.getElementById('clock-ru').textContent = textRu;
         // Авто-звук в обычном режиме — только при смене минуты
         if (!isGameMode && !isStoppingGame) {
             var chkNorm = document.getElementById('chkNormalSpeak');
@@ -489,7 +542,7 @@
 
     function drawLinesFromCenter(context, xCenter, yCenter, radius) {
         context.strokeStyle = '#000000';
-        context.lineWidth   = 1 * scale();
+        context.lineWidth   = 1;   // ctx уже масштабирован
         const hours = [7, 6, 5, 0];
         hours.forEach(function(h) {
             const angle = (h - 3) * (Math.PI / 6);
@@ -498,14 +551,6 @@
             context.lineTo(xCenter + radius * Math.cos(angle), yCenter + radius * Math.sin(angle));
             context.stroke();
         });
-    }
-
-    function getTextAngle(textHour) {
-        return (textHour - 3) * (Math.PI / 6);
-    }
-
-    function degreesToRadians(degrees) {
-        return degrees * (Math.PI / 180);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -539,16 +584,27 @@
         '#333333': '#cccccc',  // числа: почти белые
         '#888888': '#aaaaaa',  // многоточия: серые
         '#aa2200': '#ff6644',  // Uhr: ярко-оранжевый
-        '#AA2200': '#ff6644',
-        '#B85000': '#ffaa44',  // nach: светло-оранжевый
-        '#b85000': '#ffaa44',
-        '#0055AA': '#66aaff',  // vor: голубой
-        '#0055aa': '#66aaff',
+        '#b85000': '#ffaa44',  // nach: светло-оранжевый
+        '#0055aa': '#66aaff',  // vor: голубой
     };
+
+    // #abc → #aabbcc, всё в нижний регистр
+    function normHex(col) {
+        col = String(col || '').trim().toLowerCase();
+        if (/^#[0-9a-f]{3}$/.test(col)) col = '#' + col[1] + col[1] + col[2] + col[2] + col[3] + col[3];
+        return col;
+    }
 
     function adaptColor(col) {
         if (!isDark) return col;
-        return COLOR_MAP_DARK[col] || col;
+        var c = normHex(col);
+        if (COLOR_MAP_DARK[c]) return COLOR_MAP_DARK[c];
+        // Любой другой тёмный цвет из редактора осветляем, иначе он пропадёт на тёмном фоне
+        if (!/^#[0-9a-f]{6}$/.test(c)) return col;
+        var r = parseInt(c.substr(1, 2), 16), g = parseInt(c.substr(3, 2), 16), b = parseInt(c.substr(5, 2), 16);
+        if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 >= 0.5) return col;
+        var mix = function(v) { return Math.round(v + (255 - v) * 0.55); };
+        return 'rgb(' + mix(r) + ',' + mix(g) + ',' + mix(b) + ')';
     }
 
     function drawColoredLine(context, words, cx, cy) {
@@ -589,7 +645,7 @@
 
     function drawHand(context, angle, length, xCenter, yCenter, width, color) {
         context.beginPath();
-        context.lineWidth   = width * scale();
+        context.lineWidth   = width;   // ctx уже масштабирован
         context.strokeStyle = color;
         context.lineCap     = 'round';
         context.moveTo(xCenter, yCenter);
@@ -602,6 +658,7 @@
     }
 
     function displayCanvas() {
+        if (clockRadius === undefined) return;   // ещё не было resizeCanvas()
         const s = scale();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -809,6 +866,7 @@
     }
 
     function handleInteraction(clientX, clientY) {
+        if (isGameMode) return;   // в игре циферблат не трогаем — иначе таймер простоя запустит часы
         var rect = canvas.getBoundingClientRect();
         var scX  = ORIG_W / rect.width;
         var scY  = ORIG_H / rect.height;
@@ -833,7 +891,8 @@
         var adjustedOuterRadius = 220 - padding + tolerance;
 
         if (dist < adjustedInnerRadius + tolerance) {
-            hour = Math.round(degrees / 30) % 12;
+            // сохраняем половину суток, чтобы «offiziell» оставалось осмысленным
+            hour = Math.round(degrees / 30) % 12 + (hour >= 12 ? 12 : 0);
         } else if (dist >= adjustedInnerRadius - tolerance && dist <= adjustedOuterRadius + tolerance) {
             minute = Math.round(degrees / 6) % 60;
         }
@@ -877,20 +936,23 @@
         document.getElementById('clock').style.visibility    = active ? 'hidden' : 'visible';
         document.getElementById('btnSpeak').style.visibility  = active ? 'hidden' : 'visible';
         document.getElementById('clock-ru').style.visibility = active ? 'hidden' : 'visible';
+        document.getElementById('clock-exact').style.visibility = active ? 'hidden' : 'visible';
         document.getElementById('hintText').style.visibility  = active ? 'hidden' : 'visible';
         document.getElementById('btnStart').style.visibility  = active ? 'hidden' : 'visible';
         document.getElementById('btnStop').style.visibility   = active ? 'visible' : 'hidden';
         document.getElementById('gamePhaseWrap').style.display = active ? 'flex' : 'none';
-        if (active) {
-            var dc = document.getElementById('digitalClock');
-            var r  = dc.getBoundingClientRect();
-            document.getElementById('gamePhaseWrap').style.paddingTop = (r.bottom + 6) + 'px';
-        }
+        if (active) positionTimer();
         document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
         document.getElementById('gameSettings').style.display      = active ? 'flex' : 'none';
         document.getElementById('normalSpeakWrap').style.display   = active ? 'none' : 'flex';
         // Скрываем/показываем надписи и дуги на циферблате через флаг
         displayCanvas();
+    }
+
+    // Таймер-оверлей — сразу под цифровыми часами
+    function positionTimer() {
+        var r = document.getElementById('digitalClock').getBoundingClientRect();
+        document.getElementById('gamePhaseWrap').style.paddingTop = (r.bottom + 6) + 'px';
     }
 
     // Случайное время с шагом 5 минут
@@ -901,6 +963,7 @@
     }
 
     function startGame() {
+        clearTimeout(idleTimeout);  // иначе через 30 с после тапа часы стартуют посреди игры
         stopClock();           // останавливаем реальные часы
         setGameUI(true);
         runQuestion();
@@ -913,12 +976,7 @@
         window.speechSynthesis && window.speechSynthesis.cancel(); // останавливаем речь
         isStoppingGame = true;  // запрещаем авто-звук при восстановлении
         setGameUI(false);
-        // Восстанавливаем реальное время
-        var d = new Date();
-        hour = d.getHours(); minute = d.getMinutes(); second = d.getSeconds();
-        displayCanvas();
-        showGermanTime();
-        updateDigitalClock();
+        // Восстанавливаем реальное время (tick() внутри startClock)
         startClock();
         isStoppingGame    = false; // снова разрешаем авто-звук
         lastSpokenMinute = -1;  // сбрасываем чтобы следующая смена минуты сработала
@@ -930,14 +988,11 @@
         minute = t.m;
         second = 0;
 
-        document.getElementById('clock').style.visibility    = 'hidden';
-        document.getElementById('clock-ru').style.visibility = 'hidden';
-        document.getElementById('gamePhaseWrap').style.display = 'flex';
-        if (document.getElementById('gamePhaseWrap').style.display === 'flex') {
-            var dc = document.getElementById('digitalClock');
-            var r  = dc.getBoundingClientRect();
-            document.getElementById('gamePhaseWrap').style.paddingTop = (r.bottom + 6) + 'px';
-        }
+        document.getElementById('clock').style.visibility       = 'hidden';
+        document.getElementById('clock-ru').style.visibility    = 'hidden';
+        document.getElementById('clock-exact').style.visibility = 'hidden';
+        document.getElementById('gamePhaseWrap').style.display  = 'flex';
+        positionTimer();
 
         displayCanvas();
         updateGameDigitalClock();
@@ -958,8 +1013,9 @@
 
     function runAnswer() {
         showGermanTime();
-        document.getElementById('clock').style.visibility    = 'visible';
-        document.getElementById('clock-ru').style.visibility = 'visible';
+        document.getElementById('clock').style.visibility       = 'visible';
+        document.getElementById('clock-ru').style.visibility    = 'visible';
+        document.getElementById('clock-exact').style.visibility = 'visible';
         // скрываем таймер во время показа ответа
         document.getElementById('gamePhaseWrap').style.display = 'none';
         clearInterval(gameInterval);
@@ -976,6 +1032,18 @@
 
     // ── 🔊 Произношение времени (Web Speech API) ────────────────────────────
     var speechSupported = ('speechSynthesis' in window);
+    var deVoice = null;
+    // На Android список голосов приходит асинхронно — кэшируем по событию
+    function pickDeVoice() {
+        var voices = window.speechSynthesis.getVoices();
+        deVoice = voices.find(function(v) { return v.lang === 'de-DE'; })
+               || voices.find(function(v) { return v.lang.startsWith('de'); })
+               || null;
+    }
+    if (speechSupported) {
+        pickDeVoice();
+        window.speechSynthesis.addEventListener('voiceschanged', pickDeVoice);
+    }
 
     function speakTime() {
         if (!speechSupported) return;
@@ -985,9 +1053,7 @@
         var utt = new SpeechSynthesisUtterance(text);
         utt.lang = 'de-DE';
         utt.rate = 0.9;
-        // Пробуем найти немецкий голос
-        var voices = window.speechSynthesis.getVoices();
-        var deVoice = voices.find(function(v) { return v.lang.startsWith('de'); });
+        if (!deVoice) pickDeVoice();
         if (deVoice) utt.voice = deVoice;
         window.speechSynthesis.speak(utt);
     }
@@ -1002,27 +1068,31 @@
         document.documentElement.classList.toggle('dark',  dark);
         document.documentElement.classList.toggle('light', !dark);
         document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
-        localStorage.setItem('uhrzeit_theme', dark ? 'dark' : 'light');
+        document.getElementById('themeColorMeta').setAttribute('content', dark ? '#1a1a1a' : '#ffffff');
         displayCanvas();
     }
 
+    function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+
     function toggleTheme() {
         applyTheme(!isDark);
+        lsSet('uhrzeit_theme', isDark ? 'dark' : 'light');   // запоминаем только ручной выбор
     }
 
     // Инициализация темы — вызывается из load
 
     window.addEventListener('load', function() {
         // Тема
-        var saved = localStorage.getItem('uhrzeit_theme');
+        var saved = lsGet('uhrzeit_theme');
         if (saved) {
             applyTheme(saved === 'dark');
         } else {
-            applyTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            applyTheme(!!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
         }
         if (window.matchMedia) {
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-                if (!localStorage.getItem('uhrzeit_theme')) applyTheme(e.matches);
+                if (!lsGet('uhrzeit_theme')) applyTheme(e.matches);
             });
         }
         if (speechSupported) {
@@ -1032,24 +1102,20 @@
 
     window.addEventListener('load', async function() {
         resizeCanvas();
-        var d  = new Date();
-        hour   = d.getHours();
-        minute = d.getMinutes();
-        second = d.getSeconds();
+        startClock();   // часы идут сразу, не дожидаясь GitHub
 
-        // Загружаем настройки из GitHub
+        // Настройки надписей подгружаем в фоне и перерисовываем
         var saved = await loadSettingsFromGitHub();
         if (saved) {
-            if (saved.CLOCK_TEXTS && saved.CLOCK_TEXTS[0] && saved.CLOCK_TEXTS[0].lines) {
-                CLOCK_TEXTS = saved.CLOCK_TEXTS;
+            var t = saved.CLOCK_TEXTS;
+            if (Array.isArray(t) && (t.length === 0 || (t[0] && Array.isArray(t[0].lines)))) {
+                CLOCK_TEXTS = t;
             }
-            if (saved.ARC) Object.assign(ARC, saved.ARC);
+            if (saved.ARC && typeof saved.ARC === 'object') Object.assign(ARC, saved.ARC);
+            displayCanvas();
         }
-
-        displayCanvas();
-        showGermanTime();
-        startClock();
     });
 </script>
+<script src="console.js"></script>
 </body>
 </html>

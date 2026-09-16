@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- . ':(exclude)settings.json'",
   "rewrites": [
     { "source": "/api/auth", "destination": "/api/auth.js" },
     { "source": "/api/load-settings", "destination": "/api/load-settings.js" },

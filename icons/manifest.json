@@ -1,21 +1,25 @@
 {
-  "name": "Моё приложение",
+  "name": "Wie spät ist es? — Uhrzeit",
   "short_name": "Uhrzeit",
-  "description": "",
+  "description": "Uhrzeit auf Deutsch üben",
+  "lang": "de",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#00d4ff",
+  "theme_color": "#ffffff",
   "background_color": "#ffffff",
   "icons": [
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

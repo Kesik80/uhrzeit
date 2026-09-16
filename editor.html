@@ -56,6 +56,7 @@
         .btn-open   { background: #1a6fc4; color: #fff; }
         .btn-save   { background: #2ecc71; color: #fff; }
         .btn-save:disabled { background: #aaa; cursor: not-allowed; }
+        .btn-save.dirty { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #f39c12; }
         .btn-preset { background: #9b59b6; color: #fff; }
 
         #saveStatus { font-size: 11px; color: var(--muted); min-height: 14px; }
@@ -168,7 +169,7 @@
             <button onclick="resetAll()" style="background:none;border:1px dashed #cc4422;color:#cc4422;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;white-space:nowrap">↺ Сброс</button>
         </div>
         <div class="export-card">
-            <h3>Готовый код (справочно)</h3>
+            <h3>Готовый код → index.html (ARC_DEFAULT / CLOCK_TEXTS_DEFAULT)</h3>
             <textarea id="exportCode" readonly></textarea>
             <button class="btn-copy" id="btnCopy" onclick="copyCode()">Скопировать</button>
         </div>
@@ -179,7 +180,11 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // АВТОРИЗАЦИЯ
 // ═══════════════════════════════════════════════════════════════════════════
-var _authPwd = sessionStorage.getItem('editor_auth') || '';
+function ssGet(k) { try { return sessionStorage.getItem(k); } catch(e) { return null; } }
+function ssSet(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch(e) {} }
+
+ssSet('editor_auth', null);             // старая версия хранила здесь пароль открытым текстом
+var _authToken = ssGet('editor_token') || '';
 
 async function doLogin() {
     var pwd = document.getElementById('pwdInput').value.trim();
@@ -193,9 +198,11 @@ async function doLogin() {
             body: JSON.stringify({ password: pwd })
         });
         var d = await r.json();
-        if (d.ok) {
-            _authPwd = pwd;
-            sessionStorage.setItem('editor_auth', pwd);
+        if (d.ok && d.token) {
+            _authToken = d.token;
+            ssSet('editor_token', d.token);
+            document.getElementById('pwdInput').value = '';
+            document.getElementById('loginBtn').textContent = 'Войти';
             showEditor();
         } else {
             document.getElementById('loginError').textContent = d.error || 'Неверный пароль';
@@ -207,41 +214,68 @@ async function doLogin() {
     }
 }
 
+var _loaded = false;
 function showEditor() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('editorLayout').style.display = 'flex';
     resizeCanvas();
-    loadFromGitHub();
+    if (!_loaded) { _loaded = true; loadFromGitHub(); }   // после повторного входа правки не теряем
+}
+
+function showLogin(msg) {
+    _authToken = '';
+    ssSet('editor_token', null);
+    document.getElementById('loginError').textContent = msg || '';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('pwdInput').focus();
 }
 
 // Автовход если сессия есть
 window.addEventListener('load', function() {
-    if (_authPwd) showEditor();
+    if (_authToken) showEditor();
     else document.getElementById('pwdInput').focus();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ДАННЫЕ
 // ═══════════════════════════════════════════════════════════════════════════
+// Синхронизировано с CLOCK_TEXTS_DEFAULT / ARC_DEFAULT в index.html
 var DEFAULT_TEXTS = [
-    { textHour: 11.9, radius_k: 0.96, lines: [[{t:'... ', c:'#888888'}, {t:'Uhr ', c:'#aa2200'}]] },
-    { textHour:  1.2, radius_k: 1.00, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  2.2, radius_k: 1.08, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  3.0, radius_k: 1.04, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  3.8, radius_k: 1.10, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  4.7, radius_k: 1.08, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  5.9, radius_k: 0.93, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  7.2, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  8.1, radius_k: 1.04, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
-    { textHour:  9.0, radius_k: 1.01, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
-    { textHour:  9.9, radius_k: 1.06, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
-    { textHour: 10.9, radius_k: 0.98, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    { textHour: 11.9, radius_k: 1.00, lines: [[{t:'...', c:'#888888'}, {t:'Uhr', c:'#aa2200'}]] },
+    { textHour:  1.1, radius_k: 1.05, lines: [[{t:'5 ', c:'#333333'}, {t:'nach ', c:'#B85000'}, {t:'...', c:'#888888'}]] },
+    { textHour:  2.2, radius_k: 1.12, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  3.0, radius_k: 1.08, lines: [[{t:'Viertel ', c:'#333333'}], [{t:' nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  3.8, radius_k: 1.14, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  4.7, radius_k: 1.11, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055aa'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  5.9, radius_k: 1.00, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  7.1, radius_k: 1.05, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  8.1, radius_k: 1.09, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    { textHour:  9.0, radius_k: 1.07, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
+    { textHour: 10.0, radius_k: 1.11, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    { textHour: 10.9, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
 ];
 var DEFAULT_ARC = { lineWidth:3, arrowSize:25, radiusExtra:20, colorRight:'#FFC04C', colorLeft:'#FF8970' };
 
 var CLOCK_TEXTS = JSON.parse(JSON.stringify(DEFAULT_TEXTS));
 var ARC         = JSON.parse(JSON.stringify(DEFAULT_ARC));
 var _sha        = null;
+var _savedSnap  = null;   // снимок последнего загруженного/сохранённого состояния
+
+function snapshot() { return JSON.stringify({ CLOCK_TEXTS: CLOCK_TEXTS, ARC: ARC }); }
+function isDirty()  { return _savedSnap !== null && snapshot() !== _savedSnap; }
+function updateDirtyUI() {
+    var btn = document.getElementById('btnSave');
+    var d = isDirty();
+    btn.classList.toggle('dirty', d);
+    btn.textContent = d ? '💾 Сохранить •' : '💾 Сохранить';
+}
+window.addEventListener('beforeunload', function(e) {
+    if (isDirty()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+function validTexts(t) {
+    return Array.isArray(t) && (t.length === 0 || (t[0] && Array.isArray(t[0].lines)));
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GITHUB API
@@ -255,22 +289,25 @@ function setStatus(msg, ok) {
 async function loadFromGitHub() {
     setStatus('Загрузка настроек из GitHub…');
     try {
-        var r = await fetch('/api/load-settings');
+        var r = await fetch('/api/load-settings?fresh=1', { cache: 'no-store' });
         var d = await r.json();
         if (d.ok && d.settings) {
             _sha = d.sha || null;
-            if (d.settings.CLOCK_TEXTS && d.settings.CLOCK_TEXTS[0] && d.settings.CLOCK_TEXTS[0].lines)
-                CLOCK_TEXTS = d.settings.CLOCK_TEXTS;
+            if (validTexts(d.settings.CLOCK_TEXTS)) CLOCK_TEXTS = d.settings.CLOCK_TEXTS;
             if (d.settings.ARC) Object.assign(ARC, d.settings.ARC);
             setStatus('Загружено из GitHub ✓', true);
-        } else {
+        } else if (d.ok) {
             setStatus('Используются настройки по умолчанию');
+        } else {
+            setStatus('Ошибка загрузки: ' + (d.error || r.status), false);
         }
     } catch(e) {
         setStatus('Ошибка загрузки: ' + e.message, false);
     }
+    _savedSnap = snapshot();
     buildArcControls();
     buildControls();
+    draw();
 }
 
 async function saveToGitHub() {
@@ -282,7 +319,7 @@ async function saveToGitHub() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                password: _authPwd,
+                token: _authToken,
                 sha: _sha,
                 settings: { CLOCK_TEXTS: CLOCK_TEXTS, ARC: ARC }
             })
@@ -290,7 +327,14 @@ async function saveToGitHub() {
         var d = await r.json();
         if (d.ok) {
             _sha = d.sha;
+            _savedSnap = snapshot();
+            updateDirtyUI();
             setStatus('Сохранено в GitHub ✓', true);
+        } else if (d.code === 'auth') {
+            // Правки остаются в памяти — после входа достаточно нажать «Сохранить» ещё раз
+            showLogin('Сессия истекла. Войдите и нажмите «Сохранить» снова');
+        } else if (d.code === 'conflict') {
+            setStatus('⚠ ' + d.error, false);
         } else {
             setStatus('Ошибка: ' + (d.error || 'неизвестная'), false);
         }
@@ -306,7 +350,10 @@ async function saveToGitHub() {
 function getPresets() {
     try { return JSON.parse(localStorage.getItem('uhrzeit_presets') || '{}'); } catch(e) { return {}; }
 }
-function storePresets(p) { localStorage.setItem('uhrzeit_presets', JSON.stringify(p)); }
+function storePresets(p) {
+    try { localStorage.setItem('uhrzeit_presets', JSON.stringify(p)); }
+    catch(e) { setStatus('Не удалось сохранить пресет: ' + e.message, false); }
+}
 
 function openPresets() {
     renderPresetList();
@@ -369,7 +416,8 @@ var ORIG_W = 600, ORIG_H = 640, bezelThickness = 12, padding = 40;
 function sc() { return canvas.width / ORIG_W; }
 function resizeCanvas() {
     var w = canvas.parentElement.clientWidth;
-    canvas.width = w; canvas.height = Math.round(w * ORIG_H / ORIG_W);
+    var dpr = window.devicePixelRatio || 1;   // чёткость на HiDPI
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(w * ORIG_H / ORIG_W * dpr);
     draw();
 }
 window.addEventListener('resize', resizeCanvas);
@@ -405,7 +453,7 @@ function drawSectors(ctx2,xC,yC,R){
     });
 }
 function drawLines(ctx2,xC,yC,R){
-    ctx2.strokeStyle='#000';ctx2.lineWidth=sc();
+    ctx2.strokeStyle='#000';ctx2.lineWidth=1;
     [7,6,5,0].forEach(function(h){
         var a=(h-3)*Math.PI/6;
         ctx2.beginPath();ctx2.moveTo(xC,yC);ctx2.lineTo(xC+R*Math.cos(a),yC+R*Math.sin(a));ctx2.stroke();
@@ -431,7 +479,7 @@ function drawTexts(xC,yC,R){
     });
 }
 function drawHand(ctx2,angle,len,xC,yC,w,col){
-    ctx2.beginPath();ctx2.lineWidth=w*sc();ctx2.strokeStyle=col;ctx2.lineCap='round';
+    ctx2.beginPath();ctx2.lineWidth=w;ctx2.strokeStyle=col;ctx2.lineCap='round';
     ctx2.moveTo(xC,yC);ctx2.lineTo(xC+len*Math.cos(angle-Math.PI/2),yC+len*Math.sin(angle-Math.PI/2));
     ctx2.stroke();ctx2.closePath();
 }
@@ -442,6 +490,9 @@ function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.save();ctx.scale(s,s);
     var R=(ORIG_W-2*padding)/2-50, xC=ORIG_W/2, yC=ORIG_H/2-20, rN=R-padding-15;
+
+    // Фон циферблата — как в index.html
+    ctx.beginPath();ctx.arc(xC,yC,R-padding,0,2*Math.PI);ctx.fillStyle='#f5f0e8';ctx.fill();
 
     drawArcs(ctx,xC,yC,R-padding);
     drawSectors(ctx,xC,yC,R-padding);
@@ -471,15 +522,15 @@ function draw() {
 
     // Цифры
     for(var th=1;th<=12;th++){
-        ctx.font='bold 32px Tahoma';ctx.textAlign='center';ctx.fillStyle='#000';
+        ctx.font='bold 32px Tahoma';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#111';
         var xt=xC+(rN-30)*Math.cos(-30*th*Math.PI/180+Math.PI/2);
         var yt=yC-(rN-30)*Math.sin(-30*th*Math.PI/180+Math.PI/2);
-        ctx.fillText(th,xt,yt+10);
+        ctx.fillText(th,xt,yt);
     }
 
     // Стрелки 10:10
     applyShadow(ctx,'rgba(0,0,0,0.5)',3,3,3);
-    drawHand(ctx,(10+10/60)*Math.PI/6,rN/1.7,xC,yC,6,'#000');
+    drawHand(ctx,(10+10/60)*Math.PI/6,rN/1.4,xC,yC,6,'#000');
     drawHand(ctx,10*Math.PI/30,rN-10,xC,yC,4,'#000');
     clearShadow(ctx);
 
@@ -515,6 +566,10 @@ function draw() {
     eG.addColorStop(0,'rgba(0,0,0,0)');eG.addColorStop(1,'rgba(0,0,0,0.2)');
     ctx.arc(xC,yC,R-padding,0,2*Math.PI,true);ctx.fillStyle=eG;ctx.fill();ctx.closePath();
     ctx.restore();
+
+    // draw() вызывается после любой правки — здесь же обновляем экспорт и индикатор
+    updateExport();
+    updateDirtyUI();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -524,12 +579,20 @@ var _pickerCb = null;
 
 function getAllColors() {
     var set = {};
-    CLOCK_TEXTS.forEach(function(cfg){cfg.lines.forEach(function(line){line.forEach(function(w){set[w.c.toLowerCase()]=true;});});});
-    set[ARC.colorRight.toLowerCase()]=true; set[ARC.colorLeft.toLowerCase()]=true;
+    CLOCK_TEXTS.forEach(function(cfg){cfg.lines.forEach(function(line){line.forEach(function(w){set[normHex(w.c)]=true;});});});
+    set[normHex(ARC.colorRight)]=true; set[normHex(ARC.colorLeft)]=true;
     return Object.keys(set);
 }
 
+// input[type=color] принимает только #rrggbb
+function normHex(c) {
+    c = String(c || '').trim().toLowerCase();
+    if (/^#[0-9a-f]{3}$/.test(c)) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
+    return /^#[0-9a-f]{6}$/.test(c) ? c : '#000000';
+}
+
 function openColorPicker(cur, cb) {
+    cur = normHex(cur);
     _pickerCb = cb;
     var nat = document.getElementById('colorNative');
     var prev = document.getElementById('colorPreview');
@@ -597,7 +660,7 @@ function makeCard(cfg, idx) {
     var btnL=document.createElement('button');
     btnL.style.cssText='background:none;border:1px dashed #aaa;color:#888;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;margin-bottom:6px;width:100%';
     btnL.textContent='+ строка';
-    btnL.onclick=(function(i){return function(){ CLOCK_TEXTS[i].lines.push([{t:'текст',c:'#333'}]); buildControls();draw(); };})(idx);
+    btnL.onclick=(function(i){return function(){ CLOCK_TEXTS[i].lines.push([{t:'текст',c:'#333333'}]); buildControls();draw(); };})(idx);
     card.appendChild(btnL);
     card.appendChild(makeSlider(idx,'textHour','Позиция',0,12,0.1));
     card.appendChild(makeSlider(idx,'radius_k','Радиус',0.7,1.6,0.01));
@@ -613,7 +676,7 @@ function makeLineSection(idx,li){
     var baw=document.createElement('button');
     baw.style.cssText='background:none;border:none;color:var(--accent);font-size:10px;cursor:pointer;padding:0';
     baw.textContent='+ слово';
-    baw.onclick=(function(i,l){return function(){CLOCK_TEXTS[i].lines[l].push({t:'текст',c:'#333'}); buildControls();draw();};})(idx,li);
+    baw.onclick=(function(i,l){return function(){CLOCK_TEXTS[i].lines[l].push({t:'текст',c:'#333333'}); buildControls();draw();};})(idx,li);
     var bdl=document.createElement('button');
     bdl.style.cssText='background:none;border:none;color:var(--red);font-size:10px;cursor:pointer;padding:0';
     bdl.textContent='✕ строку';
@@ -633,7 +696,7 @@ function makeWordChip(idx,li,wi){
     };})(idx,li,wi);
     var cb=makeColorBtn(CLOCK_TEXTS[idx].lines[li][wi].c,(function(i,l,w){return function(nc){ CLOCK_TEXTS[i].lines[l][w].c=nc; draw();updateExport(); };})(idx,li,wi));
     var bd=document.createElement('button'); bd.textContent='✕';
-    bd.style.cssText='background:none;border:none;color:#cc224488;font-size:11px;cursor:pointer;padding:0;flex-shrink:0';
+    bd.style.cssText='background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:0 4px;flex-shrink:0';
     bd.onclick=(function(i,l,w){return function(){ if(CLOCK_TEXTS[i].lines[l].length<=1)return; CLOCK_TEXTS[i].lines[l].splice(w,1); buildControls();draw();};})(idx,li,wi);
     row.appendChild(inp);row.appendChild(cb);row.appendChild(bd);
     return row;
@@ -664,16 +727,31 @@ function resetAll(){
 }
 
 function updateExport(){
+    var ta=document.getElementById('exportCode');
+    if(!ta)return;
     var out=CLOCK_TEXTS.map(function(cfg){
-        var ls=cfg.lines.map(function(line){return '['+line.map(function(w){return "{t:'"+w.t+"',c:'"+w.c+"'}";}).join(',')+']';}).join(',');
-        return "  {textHour:"+(+cfg.textHour).toFixed(1)+",radius_k:"+(+cfg.radius_k).toFixed(2)+",lines:["+ls+"]},";
+        var ls=cfg.lines.map(function(line){
+            return '['+line.map(function(w){return "{t:"+JSON.stringify(w.t)+", c:'"+w.c+"'}";}).join(', ')+']';
+        }).join(', ');
+        return "        { textHour: "+(+cfg.textHour).toFixed(1)+", radius_k: "+(+cfg.radius_k).toFixed(2)+", lines: ["+ls+"] },";
     });
-    document.getElementById('exportCode').value="var ARC="+JSON.stringify(ARC)+";\nvar CLOCK_TEXTS=[\n"+out.join('\n')+"\n];";
+    ta.value="    const ARC_DEFAULT = "+JSON.stringify(ARC)+";\n\n    var CLOCK_TEXTS_DEFAULT = [\n"+out.join('\n')+"\n    ];";
 }
 function copyCode(){
-    document.getElementById('exportCode').select();document.execCommand('copy');
-    var b=document.getElementById('btnCopy');b.textContent='✓ Скопировано!';
-    setTimeout(function(){b.textContent='Скопировать';},2000);
+    var ta=document.getElementById('exportCode');
+    var b=document.getElementById('btnCopy');
+    function done(ok){
+        b.textContent=ok?'✓ Скопировано!':'✕ Не удалось — выделите вручную';
+        setTimeout(function(){b.textContent='Скопировать';},2000);
+    }
+    function fallback(){
+        ta.select(); var ok=false;
+        try{ ok=document.execCommand('copy'); }catch(e){}
+        done(ok);
+    }
+    if(navigator.clipboard&&window.isSecureContext){
+        navigator.clipboard.writeText(ta.value).then(function(){done(true);},fallback);
+    } else fallback();
 }
 
 function buildArcControls(){
@@ -705,5 +783,6 @@ function buildArcControls(){
     c.appendChild(br);
 }
 </script>
+<script src="console.js"></script>
 </body>
 </html>

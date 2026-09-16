@@ -44,6 +44,15 @@
             background: var(--surface); border-bottom: 1px solid var(--border);
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
+        /* Статус-бар установленного приложения: белый/чёрный по теме телефона (см. index.html) */
+        :root { --bar: #ffffff; }
+        @media (prefers-color-scheme: dark) { :root { --bar: #000000; } }
+        @media (display-mode: standalone) {
+            .top-panel, #loginScreen {
+                background: linear-gradient(to bottom, var(--bar) 0, var(--surface) 56px) top / 100% 56px no-repeat, var(--surface);
+            }
+            #loginScreen { background: linear-gradient(to bottom, var(--bar) 0, var(--bg) 56px) top / 100% 56px no-repeat, var(--bg); }
+        }
         h1 { font-size: 13px; color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase; }
 
         .top-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }

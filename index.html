@@ -43,6 +43,24 @@
                 }
         }
 
+        /* ── Статус-бар установленного приложения ──
+           Chrome на Android берёт цвет бара из manifest при установке и игнорирует
+           theme-color страницы. В manifest цвета нет → бар белый при светлой теме
+           телефона и чёрный при тёмной. Здесь --bar повторяет этот цвет,
+           а верх страницы плавно переходит от него к фону — стык не виден
+           при любой комбинации темы телефона и темы приложения. */
+        :root { --bar: #ffffff; }
+        @media (prefers-color-scheme: dark) {
+            :root { --bar: #000000; }
+        }
+        @media (display-mode: standalone) {
+            body {
+                background:
+                    linear-gradient(to bottom, var(--bar) 0, var(--bg) 56px) top / 100% 56px no-repeat,
+                    var(--bg) !important;
+            }
+        }
+
         body {
             background: var(--bg);
             color: var(--text);

@@ -18,7 +18,16 @@ export default async function handler(req, res) {
       const d = await subscription(key);
       return Object.assign({ index: i }, d);
     } catch (e) {
-      return { index: i, error: e.message + (e.body ? ' — ' + e.body : ''), used: 0, limit: 0, left: 0, percent: 100, tier: '—' };
+      // Частый случай: у ключа нет права User → Access. Озвучка при этом работает,
+      // просто остаток символов посмотреть нельзя.
+      let msg = e.message, noPerm = false;
+      try {
+        const d = JSON.parse(e.body || '{}').detail || {};
+        if (d.message) msg = d.message;
+        noPerm = d.status === 'missing_permissions';
+      } catch (_) {}
+      return { index: i, error: msg, noPermission: noPerm, status: e.status || 0,
+               used: 0, limit: 0, left: 0, percent: 0, tier: '—' };
     }
   }));
 

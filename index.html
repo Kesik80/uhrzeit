@@ -109,7 +109,26 @@
             color: var(--hint);
             text-align: center;
         }
-        #digitalClock.paused { opacity: 0.6; }
+        #digitalClock.paused #digitalTime { opacity: 0.6; }
+        .dc-wrap { position: relative; display: inline-block; }
+        /* «вернуть текущее время» — справа от цифр, время остаётся по центру */
+        #btnResume {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 10px;
+            white-space: nowrap;
+            font: bold 13px Tahoma, sans-serif;
+            letter-spacing: 0;
+            color: var(--digital);
+            background: transparent;
+            border: 1px solid currentColor;
+            border-radius: 14px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #btnResume[hidden] { display: none; }
 
         #btnTheme {
             position: fixed;
@@ -167,7 +186,7 @@
 
     <button id="btnTheme" onclick="toggleTheme()" title="Сменить тему">🌙</button>
     <h1 id="appTitle">Wie spät ist es?</h1>
-    <div id="digitalClock">00:00:00</div>
+    <div id="digitalClock"><span class="dc-wrap"><span id="digitalTime">00:00:00</span><button id="btnResume" type="button" hidden onclick="resumeClock()">↻ сейчас</button></span></div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px">
         <div id="clock"> </div>
         <button id="btnSpeak" onclick="speakTime()" title="Произнести" style="
@@ -293,25 +312,29 @@
     function pad2(n) { return String(n).padStart(2, '0'); }
 
     function updateDigitalClock() {
-        if (isGameMode) return; // во время игры не перезаписываем
+        const btn = document.getElementById('btnResume');
+        if (isGameMode) { btn.hidden = true; return; } // во время игры не перезаписываем
         const el = document.getElementById('digitalClock');
+        const t  = document.getElementById('digitalTime');
+        btn.hidden = !isClockPaused;
         if (isClockPaused) {
             // На паузе показываем выставленное пальцем время, а не реальное
-            el.textContent = pad2(hour) + ':' + pad2(minute) + ' ⏸';
+            t.textContent = pad2(hour) + ':' + pad2(minute);
             el.classList.add('paused');
             return;
         }
         el.classList.remove('paused');
         const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = String(now.getMinutes()).padStart(2, '0');
-        const s = String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('digitalClock').textContent = `${h}:${m}:${s}`;
+        t.textContent = pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ':' + pad2(now.getSeconds());
     }
     function updateGameDigitalClock() {
-        const h = String(hour % 12 || 12).padStart(2, '0');
-        const m = String(minute).padStart(2, '0');
-        document.getElementById('digitalClock').textContent = `${h}:${m}`;
+        document.getElementById('btnResume').hidden = true;
+        document.getElementById('digitalTime').textContent = pad2(hour % 12 || 12) + ':' + pad2(minute);
+    }
+    // Кнопка «↻ сейчас»: сразу вернуть реальное время, не дожидаясь 30 с простоя
+    function resumeClock() {
+        clearTimeout(idleTimeout);
+        startClock();
     }
     setInterval(updateDigitalClock, 1000);
     updateDigitalClock();

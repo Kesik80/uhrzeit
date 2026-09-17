@@ -88,7 +88,10 @@
         background: repeating-linear-gradient(45deg, #1a6fc4 0 3px, transparent 3px 6px); opacity: .6;
     }
     .qnums { font-size: 12px; color: var(--muted); line-height: 1.45; }
-    .acc { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 7px; }
+    .acc { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 7px;
+           cursor: pointer; padding: 3px 4px; border-radius: 8px; border: 1px solid transparent; }
+    .acc.on { border-color: var(--accent); background: #eef4fc; }
+    .acc.dead { cursor: not-allowed; opacity: .7; }
     .acc .nm { width: 78px; flex-shrink: 0; color: var(--text); }
     .acc .nm b { color: var(--accent); }
     .acc .b { flex: 1; height: 7px; background: #e6e9ef; border-radius: 4px; overflow: hidden; }
@@ -335,7 +338,8 @@
     var meta = { files: {} };  // voice.json с сайта
     var filter = 'all';
     var quota = null;
-    var keyIndex = 0;      // аккаунт ElevenLabs, с которого начинаем
+    var keyIndex = 0;        // аккаунт ElevenLabs, с которого начинаем
+    var manualKey = false;   // аккаунт выбран вручную — не переставлять его автоматически
 
     // ── хранение ────────────────────────────────────────────
     function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
@@ -590,7 +594,14 @@
             var d = await r.json();
             if (!r.ok) { if (authError(d)) return; throw new Error(d.error || ('HTTP ' + r.status)); }
             quota = d;
-            if (Number.isInteger(d.best)) keyIndex = d.best;   // начинаем с самого «полного»
+            var acc = (d.accounts || [])[keyIndex];
+            // сами выбираем «самый полный», пока пользователь не выбрал вручную
+            // (и всё равно выбираем, если выбранный аккаунт пуст или сломан)
+            if (Number.isInteger(d.best) && (!manualKey || !acc || acc.error || acc.left <= 0)) {
+                if (manualKey && acc) log('аккаунт ' + (keyIndex + 1) + ' больше не годится — беру ' + (d.best + 1), 'new');
+                keyIndex = d.best;
+                manualKey = false;
+            }
             paintQuota();
         } catch (e) {
             quota = null;
@@ -620,12 +631,14 @@
         // строка по каждому аккаунту: остаток, дата обновления, какой сейчас рабочий
         $('accounts').innerHTML = !many ? '' : accounts.map(function (a) {
             var cls = a.percent >= 90 ? 'crit' : a.percent >= 70 ? 'warn' : '';
-            return '<div class="acc' + (a.error ? ' dead' : '') + '">' +
+            return '<div class="acc' + (a.error ? ' dead' : '') + (a.index === keyIndex ? ' on' : '') +
+                   '" data-i="' + a.index + '">' +
                 '<span class="nm">' + (a.index === keyIndex ? '<b>▶ ' + (a.index + 1) + '</b>' : '&nbsp;&nbsp;' + (a.index + 1)) +
                     ' · ' + (a.tier || '—') + '</span>' +
                 '<span class="b"><i class="' + cls + '" style="width:' + a.percent + '%"></i></span>' +
                 '<span class="n">' + (a.error ? 'ошибка' : nf(a.left) + ' симв.') + '</span></div>';
-        }).join('');
+        }).join('') + '<div class="hint" style="margin-top:6px">Нажми на аккаунт, чтобы озвучивать с него' +
+            (manualKey ? ' · выбран вручную' : ' · выбирается сам') + '</div>';
 
         var when = '';
         var next = accounts.filter(function (a) { return !a.error && a.resetUnix; })
@@ -643,6 +656,15 @@
                 : 'всё уже озвучено') +
             '<br>одна проба ≈ ' + phrase($('sampleKey').value, readSettings()).length + ' симв.';
     }
+    // ручной выбор аккаунта
+    $('accounts').addEventListener('click', function (e) {
+        var row = e.target.closest('.acc');
+        if (!row || row.classList.contains('dead')) return;
+        keyIndex = +row.dataset.i;
+        manualKey = true;
+        paintQuota();
+        log('озвучиваю с аккаунта ' + (keyIndex + 1), 'new');
+    });
     $('qRefresh').addEventListener('click', loadQuota);
     $('redo').addEventListener('change', paintQuota);
 
@@ -670,7 +692,8 @@
         }
         // сервер мог перейти на другой аккаунт — запоминаем, чтобы не стучаться в пустой
         if (Number.isInteger(d.keyIndex) && d.keyIndex !== keyIndex) {
-            keyIndex = d.keyIndex;
+            keyIndex = d.keyIndex;   // ручной выбор перебивается, только когда символы кончились
+            manualKey = false;
             log('перешли на аккаунт ' + (keyIndex + 1) + ' — у предыдущего кончились символы', 'new');
         }
         return d.audio;

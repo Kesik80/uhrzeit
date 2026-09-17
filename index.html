@@ -358,14 +358,14 @@
         document.getElementById('clock-ru').textContent    = w.ru;
         updateDigitalClock();
 
-        // Авто-звук в обычном режиме — только при смене минуты
+        // Авто-звук в обычном режиме — при смене времени (часа ИЛИ минуты).
+        // Раньше сравнивалась только минута, и перевод часовой стрелки молчал.
+        var timeKey = hour * 60 + minute;
         if (!isGameMode && !isStoppingGame) {
             var chkNorm = document.getElementById('chkNormalSpeak');
-            if (chkNorm && chkNorm.checked) {
-                if (minute !== lastSpokenMinute) {
-                    lastSpokenMinute = minute;
-                    setTimeout(speakTime, 200);
-                }
+            if (chkNorm && chkNorm.checked && timeKey !== lastSpokenKey) {
+                lastSpokenKey = timeKey;
+                setTimeout(speakTime, 200);
             }
         }
     }
@@ -811,7 +811,7 @@
     var gameCountdown = 0;     // секунды до конца фазы
     var isGameMode    = false;
     var isStoppingGame  = false; // подавляет авто-звук при выходе из игры
-    var lastSpokenMinute = -1;  // последняя озвученная минута (обычный режим)
+    var lastSpokenKey = -1;     // последнее озвученное время, часы*60+минуты (обычный режим)
 
     // ─── SVG ТАЙМЕР ──────────────────────────────────────────────────────────
     var CIRCUMFERENCE = 2 * Math.PI * 30; // 188.5
@@ -880,7 +880,8 @@
         // Восстанавливаем реальное время (tick() внутри startClock)
         startClock();
         isStoppingGame    = false; // снова разрешаем авто-звук
-        lastSpokenMinute = -1;  // сбрасываем чтобы следующая смена минуты сработала
+        // текущее время считаем уже «озвученным» — заговорим при следующей смене, а не через секунду
+        lastSpokenKey = hour * 60 + minute;
     }
 
     function runQuestion() {

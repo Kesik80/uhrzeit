@@ -88,6 +88,15 @@
         background: repeating-linear-gradient(45deg, #1a6fc4 0 3px, transparent 3px 6px); opacity: .6;
     }
     .qnums { font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .acc { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 7px; }
+    .acc .nm { width: 78px; flex-shrink: 0; color: var(--text); }
+    .acc .nm b { color: var(--accent); }
+    .acc .b { flex: 1; height: 7px; background: #e6e9ef; border-radius: 4px; overflow: hidden; }
+    .acc .b i { display: block; height: 100%; background: var(--green); }
+    .acc .b i.warn { background: var(--orange); }
+    .acc .b i.crit { background: var(--red); }
+    .acc .n { width: 92px; text-align: right; flex-shrink: 0; }
+    .acc.dead .nm, .acc.dead .n { color: var(--red); }
 
     /* пробы */
     .take {
@@ -162,6 +171,7 @@
         </div>
         <div class="qbar"><i id="qFill"></i><s id="qNeed"></s></div>
         <div class="qnums" id="qNums">…</div>
+        <div id="accounts"></div>
     </div>
 
     <!-- голос и модель -->
@@ -325,6 +335,7 @@
     var meta = { files: {} };  // voice.json с сайта
     var filter = 'all';
     var quota = null;
+    var keyIndex = 0;      // аккаунт ElevenLabs, с которого начинаем
 
     // ── хранение ────────────────────────────────────────────
     function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
@@ -579,6 +590,7 @@
             var d = await r.json();
             if (!r.ok) { if (authError(d)) return; throw new Error(d.error || ('HTTP ' + r.status)); }
             quota = d;
+            if (Number.isInteger(d.best)) keyIndex = d.best;   // начинаем с самого «полного»
             paintQuota();
         } catch (e) {
             quota = null;
@@ -599,15 +611,32 @@
         } else {
             mark.style.display = 'none';
         }
+        var accounts = quota.accounts || [];
+        var many = accounts.length > 1;
+
+        $('qTitle').textContent = 'Лимит ElevenLabs · ' + quota.percent + '%' +
+            (many ? ' · аккаунтов: ' + accounts.length : '');
+
+        // строка по каждому аккаунту: остаток, дата обновления, какой сейчас рабочий
+        $('accounts').innerHTML = !many ? '' : accounts.map(function (a) {
+            var cls = a.percent >= 90 ? 'crit' : a.percent >= 70 ? 'warn' : '';
+            return '<div class="acc' + (a.error ? ' dead' : '') + '">' +
+                '<span class="nm">' + (a.index === keyIndex ? '<b>▶ ' + (a.index + 1) + '</b>' : '&nbsp;&nbsp;' + (a.index + 1)) +
+                    ' · ' + (a.tier || '—') + '</span>' +
+                '<span class="b"><i class="' + cls + '" style="width:' + a.percent + '%"></i></span>' +
+                '<span class="n">' + (a.error ? 'ошибка' : nf(a.left) + ' симв.') + '</span></div>';
+        }).join('');
+
         var when = '';
-        if (quota.resetUnix) {
-            var dt = new Date(quota.resetUnix * 1000);
+        var next = accounts.filter(function (a) { return !a.error && a.resetUnix; })
+                           .sort(function (a, b) { return a.resetUnix - b.resetUnix; })[0];
+        if (next) {
+            var dt = new Date(next.resetUnix * 1000);
             var days = Math.max(0, Math.ceil((dt - Date.now()) / 864e5));
-            when = ' · обновится ' + dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ' (через ' + days + ' дн.)';
+            when = ' · обновление ' + dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ' (через ' + days + ' дн.)';
         }
-        $('qTitle').textContent = 'Лимит ElevenLabs · ' + quota.percent + '%';
         $('qNums').innerHTML = 'осталось <b>' + nf(quota.left) + '</b> из ' + nf(quota.limit) +
-            ' · ' + quota.tier + when + '<br>' +
+            (many ? ' на всех аккаунтах' : ' · ' + ((accounts[0] || {}).tier || '—')) + when + '<br>' +
             (need > 0
                 ? 'на озвучку нужно <b>' + nf(need) + '</b> символов — ' +
                   (need <= quota.left ? 'хватает' : '<b style="color:#cc2244">не хватает ' + nf(need - quota.left) + '</b>')
@@ -630,13 +659,19 @@
                     stability: s.stability, similarity_boost: s.similarity_boost,
                     style: s.style, speed: s.speed, use_speaker_boost: true
                 },
-                previousText: s.ctx ? CTX_BEFORE : undefined
+                previousText: s.ctx ? CTX_BEFORE : undefined,
+                keyIndex: keyIndex
             })
         });
         var d = await r.json().catch(function () { return {}; });
         if (!r.ok) {
             if (authError(d)) { var e = new Error('auth'); e.auth = true; throw e; }
             throw new Error((d.error || ('HTTP ' + r.status)) + (d.details ? ' — ' + d.details : ''));
+        }
+        // сервер мог перейти на другой аккаунт — запоминаем, чтобы не стучаться в пустой
+        if (Number.isInteger(d.keyIndex) && d.keyIndex !== keyIndex) {
+            keyIndex = d.keyIndex;
+            log('перешли на аккаунт ' + (keyIndex + 1) + ' — у предыдущего кончились символы', 'new');
         }
         return d.audio;
     }

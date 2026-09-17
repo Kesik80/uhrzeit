@@ -1,14 +1,18 @@
 // api/speak.js — озвучка фразы через ElevenLabs (основа — speak.js из Yeva).
 // Только генерация: звук возвращается в браузер (base64), запись в GitHub — через /api/commit.
 //
-// POST { token, text, voiceId, modelId, voiceSettings, previousText, nextText }
+// POST { token, text, voiceId, modelId, voiceSettings, previousText, nextText, keyIndex }
 //   token         — из /api/auth (пароль редактора)
 //   modelId       — из белого списка, включая eleven_v3
 //   voiceSettings — { stability, similarity_boost, style, speed, use_speaker_boost }
 //   previousText / nextText — невидимый контекст интонации (у v3 не поддерживается, не отправляем)
 //
-// Env: ELEVENLABS_API_KEY, EDITOR_PASSWORD
+// Аккаунтов ElevenLabs может быть несколько: если у текущего кончились символы,
+// запрос автоматически повторяется следующим ключом (см. _eleven.js).
+//
+// Env: ELEVENLABS_API_KEY (+ _2 … _5 или ELEVENLABS_API_KEYS), EDITOR_PASSWORD
 import { checkToken, delay } from './_token.js';
+import { getKeys, isOutOfCredits } from './_eleven.js';
 
 export const config = { maxDuration: 30 };
 
@@ -42,7 +46,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { token, text, voiceId, modelId, voiceSettings, previousText, nextText } = req.body || {};
+  const { token, text, voiceId, modelId, voiceSettings, previousText, nextText, keyIndex } = req.body || {};
 
   if (!checkToken(token)) {
     await delay(500);
@@ -51,8 +55,12 @@ export default async function handler(req, res) {
   if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'text required' });
   if (text.length > 300) return res.status(400).json({ error: 'text too long' });
 
-  const KEY = process.env.ELEVENLABS_API_KEY;
-  if (!KEY) return res.status(500).json({ error: 'ELEVENLABS_API_KEY не задан в Vercel' });
+  const keys = getKeys();
+  if (!keys.length) return res.status(500).json({ error: 'ELEVENLABS_API_KEY не задан в Vercel' });
+
+  // начинаем с выбранного аккаунта, дальше — по кругу
+  const start = Number.isInteger(keyIndex) && keyIndex >= 0 && keyIndex < keys.length ? keyIndex : 0;
+  const order = keys.map((_, i) => (start + i) % keys.length);
 
   const voice = ALLOWED_VOICES[voiceId] ? voiceId : DEFAULT_VOICE;
   const model = ALLOWED_MODELS.includes(modelId) ? modelId : 'eleven_multilingual_v2';
@@ -78,22 +86,30 @@ export default async function handler(req, res) {
     if (nextText) body.next_text = String(nextText).slice(0, 400);
   }
 
-  try {
-    const r = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=${OUTPUT_FORMAT}`,
-      {
-        method: 'POST',
-        headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': KEY },
-        body: JSON.stringify(body),
+  let lastError = null;
+  for (const idx of order) {
+    try {
+      const r = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=${OUTPUT_FORMAT}`,
+        {
+          method: 'POST',
+          headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': keys[idx] },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!r.ok) {
+        const details = (await r.text()).slice(0, 400);
+        if (isOutOfCredits(r.status, details) && order.length > 1) {
+          lastError = { error: 'У аккаунта ' + (idx + 1) + ' кончились символы', details };
+          continue;                       // пробуем следующий аккаунт
+        }
+        return res.status(502).json({ error: 'ElevenLabs ' + r.status, details, keyIndex: idx });
       }
-    );
-    if (!r.ok) {
-      const details = (await r.text()).slice(0, 400);
-      return res.status(502).json({ error: 'ElevenLabs ' + r.status, details });
+      const audio = Buffer.from(await r.arrayBuffer()).toString('base64');
+      return res.json({ audio, voice: ALLOWED_VOICES[voice], model, stability, keyIndex: idx });
+    } catch (e) {
+      lastError = { error: e.message };
     }
-    const audio = Buffer.from(await r.arrayBuffer()).toString('base64');
-    return res.json({ audio, voice: ALLOWED_VOICES[voice], model, stability });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
   }
+  return res.status(502).json(Object.assign({ error: 'Символы кончились на всех аккаунтах' }, lastError));
 }

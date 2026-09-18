@@ -16,19 +16,9 @@ import { getKeys, isOutOfCredits } from './_eleven.js';
 
 export const config = { maxDuration: 30 };
 
-const ALLOWED_VOICES = {
-  'CwhRBWXzGAHq8TQ4Fs17': 'Roger',
-  'FGY2WhTYpPnrIDTdsKH5': 'Laura',
-  'TX3LPaxmHKxFdv7VOQHJ': 'Liam',
-  'XrExE9yKIg1WjnnlVkGX': 'Matilda',
-  'bIHbv24MWmeRgasZH58o': 'Will',
-  'cgSgspJ2msm6clMCkdW9': 'Jessica',
-  'cjVigY5qzO86Huf0OWal': 'Eric',
-  'nPczCjzI2devNBz1zQrb': 'Brian',
-  'onwK4e9ZLuTAKqWW03F9': 'Daniel',
-  'pFZP5JQG7iQjIQuC4Bku': 'Lily',
-  'pqHfZKP75CvOlQylNhV4': 'Bill',
-};
+// Голоса больше не ограничены белым списком: страница берёт их из самого аккаунта
+// (стандартные + добавленные из библиотеки). Проверяем только формат идентификатора.
+const VOICE_ID = /^[A-Za-z0-9]{15,40}$/;
 const DEFAULT_VOICE = 'CwhRBWXzGAHq8TQ4Fs17';
 
 // Turbo устарела (ElevenLabs рекомендует Flash) — убрана
@@ -62,7 +52,7 @@ export default async function handler(req, res) {
   const start = Number.isInteger(keyIndex) && keyIndex >= 0 && keyIndex < keys.length ? keyIndex : 0;
   const order = keys.map((_, i) => (start + i) % keys.length);
 
-  const voice = ALLOWED_VOICES[voiceId] ? voiceId : DEFAULT_VOICE;
+  const voice = VOICE_ID.test(String(voiceId || '')) ? voiceId : DEFAULT_VOICE;
   const model = ALLOWED_MODELS.includes(modelId) ? modelId : 'eleven_multilingual_v2';
   const isV3 = model === 'eleven_v3';
 
@@ -106,7 +96,7 @@ export default async function handler(req, res) {
         return res.status(502).json({ error: 'ElevenLabs ' + r.status, details, keyIndex: idx });
       }
       const audio = Buffer.from(await r.arrayBuffer()).toString('base64');
-      return res.json({ audio, voice: ALLOWED_VOICES[voice], model, stability, keyIndex: idx });
+      return res.json({ audio, voice, model, stability, keyIndex: idx });
     } catch (e) {
       lastError = { error: e.message };
     }

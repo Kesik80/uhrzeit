@@ -74,6 +74,14 @@
         background: #f3e9f7; color: var(--v3); border: 1px solid transparent;
     }
     .chips button.on { background: var(--v3); color: #fff; }
+    .lib { border-top: 1px solid #eef0f4; margin-top: 12px; padding-top: 10px; }
+    .lib .row select, .lib .row input { width: auto; flex: 1; min-width: 90px; }
+    .libitem { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #eef0f4; }
+    .libitem .lbl { flex: 1; min-width: 0; font-size: 13px; }
+    .libitem .lbl small { display: block; color: var(--muted); font-size: 11px; }
+    .libitem button.add { width: auto; margin: 0; padding: 7px 11px; font-size: 12px; border-radius: 10px; }
+    .libitem button.add[disabled] { background: #eaf8ef; color: #1e8a4c; opacity: 1; }
+
     details.code { margin-top: 10px; font-size: 12px; color: var(--muted); }
     details.code summary { cursor: pointer; }
     details.code input { margin-top: 6px; font-family: monospace; font-size: 13px; }
@@ -180,7 +188,32 @@
     <!-- голос и модель -->
     <div class="card">
         <h2>Голос</h2>
-        <select id="voice"></select>
+        <div class="row">
+            <select id="voice" style="flex:1"></select>
+            <button class="ghost slim" id="btnVoices" title="Обновить список голосов">↻</button>
+        </div>
+        <div class="hint" id="voiceNote" style="margin-top:5px"></div>
+
+        <details class="lib" id="libBox">
+            <summary style="cursor:pointer;font-size:13px;color:var(--accent)">🔎 Библиотека голосов — добавить новый</summary>
+            <div class="row" style="margin-top:8px">
+                <input type="text" id="libSearch" placeholder="кого ищем: warm, narration…">
+                <select id="libLang">
+                    <option value="de">немецкий</option>
+                    <option value="">любой язык</option>
+                    <option value="en">английский</option>
+                    <option value="ru">русский</option>
+                </select>
+                <select id="libGender">
+                    <option value="">любой</option>
+                    <option value="female">женский</option>
+                    <option value="male">мужской</option>
+                </select>
+            </div>
+            <button id="btnLib">Искать</button>
+            <div class="hint" style="margin-top:6px">Голос добавляется сразу во все аккаунты — иначе после перехода на другой аккаунт его там не окажется.</div>
+            <div id="libList"></div>
+        </details>
 
         <label>Модель</label>
         <div class="models" id="models">
@@ -283,13 +316,14 @@
     var $ = function (id) { return document.getElementById(id); };
 
     // ── константы ───────────────────────────────────────────
-    var VOICES = {
-        Roger:'CwhRBWXzGAHq8TQ4Fs17', Laura:'FGY2WhTYpPnrIDTdsKH5', Liam:'TX3LPaxmHKxFdv7VOQHJ',
-        Matilda:'XrExE9yKIg1WjnnlVkGX', Will:'bIHbv24MWmeRgasZH58o', Jessica:'cgSgspJ2msm6clMCkdW9',
-        Eric:'cjVigY5qzO86Huf0OWal', Brian:'nPczCjzI2devNBz1zQrb', Daniel:'onwK4e9ZLuTAKqWW03F9',
-        Lily:'pFZP5JQG7iQjIQuC4Bku', Bill:'pqHfZKP75CvOlQylNhV4'
-    };
-    var FEM = ['Laura', 'Matilda', 'Jessica', 'Lily'];
+    // Голоса берутся из самого аккаунта: стандартные + добавленные из библиотеки
+    var voices = [];                                  // [{ id, name, category, labels }]
+    var voiceId = 'CwhRBWXzGAHq8TQ4Fs17';             // Roger — пока список не загружен
+    var voiceName = 'Roger';
+    function voiceById(id) {
+        for (var i = 0; i < voices.length; i++) if (voices[i].id === id) return voices[i];
+        return null;
+    }
     var DIR = 'voice/de/uhr/';
     var CTX_BEFORE = 'Entschuldigung, wie spät ist es?';
     // Настроение для v3: на кнопке — понятное название, в модель уходит код
@@ -348,7 +382,7 @@
     function remember() {
         try {
             localStorage.setItem('uhrzeit_voicegen', JSON.stringify({
-                voice: $('voice').value, model: model,
+                voiceId: voiceId, voice: voiceName, model: model,
                 v3stab: v3stab, tags: $('tags').value,
                 stab: $('stab').value, sim: $('sim').value, style: $('style').value, speed: $('speed').value,
                 ctx: $('ctx').checked, dot: $('dot').checked, sample: $('sampleKey').value
@@ -391,7 +425,8 @@
     function readSettings() {
         var v3 = isV3();
         return {
-            voice: $('voice').value,
+            voiceId: voiceId,
+            voice: voiceName,
             model: model,
             stability: v3 ? v3stab : +$('stab').value,
             similarity_boost: +$('sim').value,
@@ -404,7 +439,11 @@
     }
 
     function applySettings(s) {
-        if (s.voice && VOICES[s.voice]) $('voice').value = s.voice;
+        if (s.voiceId && voiceById(s.voiceId)) {
+            voiceId = s.voiceId;
+            voiceName = voiceById(s.voiceId).name;
+            $('voice').value = voiceId;
+        }
         model = MODELS.indexOf(s.model) >= 0 ? s.model : 'eleven_multilingual_v2';
         var v3 = isV3();
         if (v3) { v3stab = s.stability; $('tags').value = s.tags || ''; paintChips(); }
@@ -459,9 +498,131 @@
     }
 
     // ── UI: голоса, пробы, теги ─────────────────────────────
-    $('voice').innerHTML = Object.keys(VOICES).map(function (n) {
-        return '<option value="' + n + '">' + n + ' · ' + (FEM.indexOf(n) >= 0 ? 'ж' : 'м') + '</option>';
-    }).join('');
+    // ── список голосов аккаунта ──
+    function renderVoices() {
+        var mine = voices.filter(function (v) { return v.category !== 'premade'; });
+        var std  = voices.filter(function (v) { return v.category === 'premade'; });
+        function opts(list) {
+            return list.map(function (v) {
+                var g = (v.labels && (v.labels.gender || v.labels.Gender)) || '';
+                g = g === 'female' ? ' · ж' : g === 'male' ? ' · м' : '';
+                return '<option value="' + v.id + '">' + escapeHtml(v.name) + g + '</option>';
+            }).join('');
+        }
+        $('voice').innerHTML =
+            (mine.length ? '<optgroup label="Из библиотеки">' + opts(mine) + '</optgroup>' : '') +
+            (std.length ? '<optgroup label="Стандартные">' + opts(std) + '</optgroup>' : '');
+        var missing = '';
+        if (!voiceById(voiceId) && voices.length) {
+            missing = voiceName;                  // в этом аккаунте такого голоса нет
+            voiceId = voices[0].id;
+        }
+        var v = voiceById(voiceId);
+        if (v) { voiceName = v.name; $('voice').value = voiceId; }
+        if (missing) log('голоса «' + missing + '» нет в аккаунте ' + (keyIndex + 1) + ' — выбран «' + voiceName + '»', 'err');
+        $('voiceNote').textContent = voices.length
+            ? 'Голоса аккаунта ' + (keyIndex + 1) + ': ' + voices.length + ' (своих ' + mine.length + ')'
+            : '';
+    }
+
+    async function loadVoices() {
+        var btn = $('btnVoices');
+        busy(btn, '…');
+        try {
+            var r = await fetch('/api/voices?action=mine&keyIndex=' + keyIndex, {
+                cache: 'no-store', headers: { Authorization: 'Bearer ' + token }
+            });
+            var d = await r.json();
+            if (!r.ok) { if (authError(d)) return; throw new Error(d.error || ('HTTP ' + r.status)); }
+            voices = d.voices || [];
+            renderVoices();
+            remember();
+        } catch (e) {
+            $('voiceNote').textContent = 'Список голосов не загрузился: ' + e.message +
+                ' (нужно право Voices → Read у ключа)';
+        }
+        idle(btn);
+    }
+    $('btnVoices').addEventListener('click', loadVoices);
+    $('voice').addEventListener('change', function () {
+        voiceId = $('voice').value;
+        var v = voiceById(voiceId);
+        if (v) voiceName = v.name;
+        showSettings();
+    });
+
+    // ── библиотека голосов ──
+    $('btnLib').addEventListener('click', async function () {
+        var btn = $('btnLib');
+        busy(btn, 'ищу…');
+        $('libList').innerHTML = '';
+        try {
+            var p = new URLSearchParams({ action: 'library' });
+            if ($('libSearch').value.trim()) p.set('search', $('libSearch').value.trim());
+            if ($('libLang').value) p.set('language', $('libLang').value);
+            if ($('libGender').value) p.set('gender', $('libGender').value);
+            var r = await fetch('/api/voices?' + p.toString(), {
+                cache: 'no-store', headers: { Authorization: 'Bearer ' + token }
+            });
+            var d = await r.json();
+            if (!r.ok) { if (authError(d)) return; throw new Error(d.error || ('HTTP ' + r.status)); }
+            renderLib(d.voices || []);
+        } catch (e) {
+            $('libList').innerHTML = '<div class="hint" style="color:var(--red);padding:8px 0">' + escapeHtml(e.message) + '</div>';
+        }
+        idle(btn);
+    });
+
+    var libFound = [];
+    function renderLib(list) {
+        libFound = list;
+        if (!list.length) { $('libList').innerHTML = '<div class="hint" style="padding:8px 0">Ничего не нашлось</div>'; return; }
+        $('libList').innerHTML = list.map(function (v, i) {
+            var about = [v.gender === 'female' ? 'ж' : v.gender === 'male' ? 'м' : '', v.accent, v.useCase, v.descriptive]
+                .filter(Boolean).join(' · ');
+            return '<div class="libitem">' +
+                (v.preview ? '<button class="ib" data-play="' + i + '">▶</button>' : '') +
+                '<div class="lbl">' + escapeHtml(v.name) + '<small>' + escapeHtml(about) + '</small></div>' +
+                '<button class="add' + (v.added ? '' : ' go') + '" data-add="' + i + '"' + (v.added ? ' disabled' : '') + '>' +
+                (v.added ? '✓ есть' : '+ Добавить') + '</button></div>';
+        }).join('');
+    }
+
+    $('libList').addEventListener('click', async function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.play !== undefined) {
+            player.src = libFound[+b.dataset.play].preview;
+            player.play().catch(function () {});
+            return;
+        }
+        if (b.dataset.add === undefined) return;
+        var v = libFound[+b.dataset.add];
+        b.disabled = true; b.textContent = '…';
+        try {
+            var r = await fetch('/api/voices', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token, action: 'add', voiceId: v.id, ownerId: v.ownerId, name: v.name })
+            });
+            var d = await r.json();
+            if (!r.ok || !d.ok) {
+                if (authError(d)) return;
+                throw new Error(d.error || (d.results || []).map(function (x) { return x.error; }).filter(Boolean)[0] || 'не добавился');
+            }
+            b.textContent = '✓ есть';
+            v.added = true;
+            log('голос «' + v.name + '» добавлен в аккаунтов: ' + d.added + ' из ' + d.total, 'ok');
+            await loadVoices();
+            if (voiceById(v.id)) {                // выбираем только что добавленный
+                voiceId = v.id; voiceName = v.name;
+                renderVoices();
+                showSettings();
+            }
+        } catch (err) {
+            b.disabled = false; b.textContent = '+ Добавить';
+            log('не добавился «' + v.name + '»: ' + err.message + ' (нужно право Voices → Write у ключа)', 'err');
+        }
+    });
     $('sampleKey').innerHTML = ITEMS.map(function (it) {
         return '<option value="' + it.key + '">' + it.time + ' — ' + it.de + '</option>';
     }).join('');
@@ -513,13 +674,14 @@
             var p = PRESETS.live;
             $('stab').value = p.stab; $('sim').value = p.sim; $('style').value = p.style;
             $('speed').value = p.speed; $('ctx').checked = p.ctx; $('dot').checked = true;
-            $('voice').value = 'Roger';
+
             // по умолчанию — текущее время
             var d = new Date();
             $('sampleKey').value = voiceKey(d.getHours(), Math.floor(d.getMinutes() / 5) * 5);
             return;
         }
-        if (VOICES[sv.voice]) $('voice').value = sv.voice;
+        if (sv.voiceId) voiceId = sv.voiceId;
+        if (sv.voice) voiceName = sv.voice;
         // старый формат: флажок v3 отдельно, Turbo больше не поддерживается
         model = sv.v3 ? 'eleven_v3' : (MODELS.indexOf(sv.model) >= 0 ? sv.model : 'eleven_multilingual_v2');
         v3stab = sv.v3stab === undefined ? 0.5 : +sv.v3stab;
@@ -543,6 +705,7 @@
         if (started) return;
         started = true;
         loadQuota();
+        loadVoices();
         loadMeta();
         render();
     }
@@ -676,6 +839,7 @@
         manualKey = true;
         paintQuota();
         log('озвучиваю с аккаунта ' + (keyIndex + 1), 'new');
+        loadVoices();          // у каждого аккаунта свой набор добавленных голосов
     });
     $('qRefresh').addEventListener('click', loadQuota);
     $('redo').addEventListener('change', paintQuota);
@@ -687,7 +851,7 @@
             body: JSON.stringify({
                 token: token,
                 text: phrase(key, s),
-                voiceId: VOICES[s.voice],
+                voiceId: s.voiceId,
                 modelId: s.model,
                 voiceSettings: {
                     stability: s.stability, similarity_boost: s.similarity_boost,

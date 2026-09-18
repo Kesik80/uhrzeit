@@ -197,7 +197,7 @@
         <details class="lib" id="libBox">
             <summary style="cursor:pointer;font-size:13px;color:var(--accent)">🔎 Библиотека голосов — добавить новый</summary>
             <div class="row" style="margin-top:8px">
-                <input type="text" id="libSearch" placeholder="кого ищем: warm, narration…">
+                <input type="text" id="libSearch" placeholder="можно не заполнять">
                 <select id="libLang">
                     <option value="de">немецкий</option>
                     <option value="">любой язык</option>
@@ -210,9 +210,11 @@
                     <option value="male">мужской</option>
                 </select>
             </div>
-            <button id="btnLib">Искать</button>
-            <div class="hint" style="margin-top:6px">Голос добавляется сразу во все аккаунты — иначе после перехода на другой аккаунт его там не окажется.</div>
+            <div class="chips" id="libTags" style="margin-top:6px"></div>
+            <button id="btnLib">Показать голоса</button>
+            <div class="hint" style="margin-top:6px">Без слова в поиске показываются популярные голоса выбранного языка. ▶ — послушать. Голос добавляется сразу во все аккаунты, иначе после перехода на другой аккаунт его там не окажется.</div>
             <div id="libList"></div>
+            <button class="ghost" id="btnMore" hidden>Показать ещё</button>
         </details>
 
         <label>Модель</label>
@@ -552,12 +554,27 @@
     });
 
     // ── библиотека голосов ──
-    $('btnLib').addEventListener('click', async function () {
-        var btn = $('btnLib');
-        busy(btn, 'ищу…');
-        $('libList').innerHTML = '';
+    // Быстрые подсказки: чем заполнить поиск, если не знаешь, что искать
+    var LIB_TAGS = ['narration', 'conversational', 'warm', 'calm', 'friendly', 'deep', 'young', 'news'];
+    $('libTags').innerHTML = LIB_TAGS.map(function (t) {
+        return '<button type="button" style="background:#eef4fc;color:var(--accent)">' + t + '</button>';
+    }).join('');
+    $('libTags').addEventListener('click', function (e) {
+        if (e.target.tagName !== 'BUTTON') return;
+        var t = e.target.textContent;
+        $('libSearch').value = ($('libSearch').value.trim() === t) ? '' : t;   // повторное нажатие снимает
+        loadLib(true);
+    });
+
+    var libFound = [];
+    var libPage = 0;
+
+    async function loadLib(reset) {
+        var btn = reset ? $('btnLib') : $('btnMore');
+        busy(btn, reset ? 'загружаю…' : '…');
+        if (reset) { libPage = 0; libFound = []; $('libList').innerHTML = ''; $('btnMore').hidden = true; }
         try {
-            var p = new URLSearchParams({ action: 'library' });
+            var p = new URLSearchParams({ action: 'library', page: String(libPage) });
             if ($('libSearch').value.trim()) p.set('search', $('libSearch').value.trim());
             if ($('libLang').value) p.set('language', $('libLang').value);
             if ($('libGender').value) p.set('gender', $('libGender').value);
@@ -566,17 +583,28 @@
             });
             var d = await r.json();
             if (!r.ok) { if (authError(d)) return; throw new Error(d.error || ('HTTP ' + r.status)); }
-            renderLib(d.voices || []);
+            renderLib(libFound.concat(d.voices || []));
+            $('btnMore').hidden = !d.hasMore;
+            libPage++;
         } catch (e) {
-            $('libList').innerHTML = '<div class="hint" style="color:var(--red);padding:8px 0">' + escapeHtml(e.message) + '</div>';
+            $('libList').innerHTML += '<div class="hint" style="color:var(--red);padding:8px 0">' + escapeHtml(e.message) + '</div>';
         }
         idle(btn);
+    }
+
+    $('btnLib').addEventListener('click', function () { loadLib(true); });
+    $('btnMore').addEventListener('click', function () { loadLib(false); });
+    ['libLang', 'libGender'].forEach(function (id) {
+        $(id).addEventListener('change', function () { loadLib(true); });
+    });
+    // открыли блок впервые — сразу показываем популярные голоса
+    $('libBox').addEventListener('toggle', function () {
+        if ($('libBox').open && !libFound.length) loadLib(true);
     });
 
-    var libFound = [];
     function renderLib(list) {
         libFound = list;
-        if (!list.length) { $('libList').innerHTML = '<div class="hint" style="padding:8px 0">Ничего не нашлось</div>'; return; }
+        if (!list.length) { $('libList').innerHTML = '<div class="hint" style="padding:8px 0">Ничего не нашлось — убери слово из поиска или смени язык</div>'; return; }
         $('libList').innerHTML = list.map(function (v, i) {
             var about = [v.gender === 'female' ? 'ж' : v.gender === 'male' ? 'м' : '', v.accent, v.useCase, v.descriptive]
                 .filter(Boolean).join(' · ');

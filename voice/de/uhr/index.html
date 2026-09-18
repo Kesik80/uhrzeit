@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Uhrzeit">
+<meta id="themeColorMeta" name="theme-color" content="#ffffff">
+<link rel="manifest" href="/icons/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <title>Wie spät ist es?</title>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* ── Тёмная тема ── */
+        :root {
+            --bg:           #ffffff;
+            --text:         #000000;
+            --hint:         #999999;
+            --clock-de:     #FF5733;
+            --clock-ru:     blue;
+            --digital:      blue;
+        }
+        /* Тёмная тема — класс на <html> чтобы все дочерние элементы получили переменные */
+        html.dark {
+            --bg:           #1a1a1a;
+            --text:         #f0f0f0;
+            --hint:         #aaaaaa;
+            --clock-de:     #ff8c70;
+            --clock-ru:     #7aaaff;
+            --digital:      #7aaaff;
+        }
+        @media (prefers-color-scheme: dark) {
+            html:not(.light) {
+                --bg:           #1a1a1a;
+                --text:         #f0f0f0;
+                --hint:         #aaaaaa;
+                --clock-de:     #ff8c70;
+                --clock-ru:     #7aaaff;
+                --digital:      #7aaaff;
+                }
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.3s, color 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100dvh;
+            padding: 12px 10px 20px;
+            gap: 8px;
+            font-family: Tahoma, sans-serif;
+        }
+
+        h1 {
+            font-size: clamp(16px, 5vw, 26px);
+            font-weight: bold;
+            text-align: center;
+            color: var(--text);
+        }
+
+        #digitalClock {
+            font-size: clamp(22px, 7vw, 40px);
+            font-weight: bold;
+            color: var(--digital);
+            text-align: center;
+            font-family: Tahoma, sans-serif;
+            letter-spacing: 0.05em;
+        }
+
+        #clock {
+            font-size: clamp(16px, 5vw, 24px);
+            color: var(--clock-de);
+            text-align: center;
+            font-weight: bold;
+        }
+
+        #clock-ru {
+            font-size: clamp(14px, 4.2vw, 20px);
+            color: var(--clock-ru);
+        }
+
+        #clock-exact {
+            font-size: clamp(12px, 3.6vw, 16px);
+            color: var(--hint);
+            text-align: center;
+            text-align: center;
+        }
+
+        .canvas-wrap {
+            width: 100%;
+            max-width: 520px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+            /* размеры только через JS, без CSS aspect-ratio */
+        }
+
+        .hint {
+            font-size: clamp(10px, 3vw, 13px);
+            color: var(--hint);
+            text-align: center;
+        }
+        #digitalClock.paused #digitalTime { opacity: 0.6; }
+        .dc-wrap { position: relative; display: inline-block; }
+        /* «вернуть текущее время» — справа от цифр, время остаётся по центру */
+        #btnResume {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 10px;
+            white-space: nowrap;
+            font: bold 13px Tahoma, sans-serif;
+            letter-spacing: 0;
+            color: var(--digital);
+            background: transparent;
+            border: 1px solid currentColor;
+            border-radius: 14px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #btnResume[hidden] { display: none; }
+
+        #btnTheme {
+            position: fixed;
+            top: calc(10px + env(safe-area-inset-top, 0px));
+            right: calc(12px + env(safe-area-inset-right, 0px));
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            z-index: 200;
+            line-height: 1;
+            opacity: 0.7;
+            padding: 4px;
+        }
+        #btnTheme:active { opacity: 1; }
+
+        /* ── Игровой режим ── */
+        .game-btn {
+            padding: 10px 28px;
+            font-size: clamp(14px, 4vw, 18px);
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #btnStart {
+            background: #2ecc71;
+            color: #fff;
+        }
+        #btnStart:active { background: #27ae60; }
+        #btnStop {
+            background: #e74c3c;
+            color: #fff;
+        }
+        #btnStop:active { background: #c0392b; }
+
+
+    </style>
+</head>
+<body data-install="banner">
+
+    <!-- Оверлей таймер — поверх всего, не влияет на layout -->
+    <div id="gamePhaseWrap" style="display:none;position:fixed;top:0;left:0;width:100%;z-index:100;
+         pointer-events:none;flex-direction:column;align-items:center;gap:2px">
+        <svg id="svgTimer" width="64" height="64" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="7"/>
+            <circle id="timerArc" cx="36" cy="36" r="30" fill="none" stroke="#e74c3c" stroke-width="7"
+                stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="0"
+                transform="rotate(-90 36 36)"/>
+            <text id="timerNum" x="36" y="41" text-anchor="middle"
+                font-size="22" font-weight="bold" fill="#e74c3c" font-family="Tahoma,sans-serif">5</text>
+        </svg>
+    </div>
+
+    <button id="btnTheme" onclick="toggleTheme()" title="Сменить тему">🌙</button>
+    <h1 id="appTitle">Wie spät ist es?</h1>
+    <div id="digitalClock"><span class="dc-wrap"><span id="digitalTime">00:00:00</span><button id="btnResume" type="button" hidden onclick="resumeClock()">↻ сейчас</button></span></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <div id="clock"> </div>
+        <button id="btnSpeak" onclick="speakTime()" title="Произнести" style="
+            background:none;border:none;cursor:pointer;font-size:clamp(18px,5vw,24px);
+            padding:2px 4px;opacity:0.7;line-height:1;display:none">🔊</button>
+    </div>
+    <div id="clock-exact"> </div>
+    <div id="clock-ru"> </div>
+    <div class="canvas-wrap">
+        <canvas id="myCanvas"></canvas>
+    </div>
+    <p class="hint" id="hintText">Нажмите на циферблат — остановите стрелки и меняйте время</p>
+    <div style="position:relative;width:180px;height:48px;margin:4px auto">
+        <button class="game-btn" id="btnStart" onclick="startGame()" style="position:absolute;inset:0;width:100%">▶ Играть</button>
+        <button class="game-btn" id="btnStop"  onclick="stopGame()" style="position:absolute;inset:0;width:100%;visibility:hidden">■ Стоп</button>
+    </div>
+
+    <!-- Настройки под кнопками — всегда в потоке, visibility переключается -->
+    <div id="gameSettings" style="display:none;flex-direction:column;align-items:center;gap:8px;margin-top:2px">
+        <!-- Выбор времени таймера -->
+        <div style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint)">
+            ⏱
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="timerDur" value="15" style="accent-color:#2ecc71"> 15с
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="timerDur" value="10" style="accent-color:#2ecc71"> 10с
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="timerDur" value="5" checked style="accent-color:#2ecc71"> 5с
+            </label>
+        </div>
+        <!-- Авто-звук в игровом режиме -->
+        <label style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none">
+            <input type="checkbox" id="chkAutoSpeak" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71">
+            🔊 Авто-звук (игра)
+        </label>
+    </div>
+
+    <!-- Авто-звук в обычном режиме — всегда виден -->
+    <label id="normalSpeakWrap" style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none;margin-top:2px">
+        <input type="checkbox" id="chkNormalSpeak" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71">
+        🔊 Авто-звук
+    </label>
+
+    <a href="editor.html" id="editorLink" style="font-size:11px;color:var(--hint);text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
+
+<script src="timewords.js"></script>
+<script>
+    var hour   = 0;
+    var minute = 0;
+    var second = 0;
+
+    var clockInterval = null;
+    var idleTimeout   = null;
+    var isClockPaused = false;
+
+    // Константы оригинала (масштабируются при resize)
+    const ORIG_W = 600;
+    const ORIG_H = 640;
+    var clockCenterX, clockCenterY, clockRadius, numbersRadius;
+
+    // ─── Настройки из GitHub ──────────────────────────────────────────────────
+
+    async function loadSettingsFromGitHub() {
+        try {
+            var ctrl  = ('AbortController' in window) ? new AbortController() : null;
+            var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, 8000) : null;
+            var r = await fetch('/api/load-settings', ctrl ? { signal: ctrl.signal } : {});
+            if (timer) clearTimeout(timer);
+            var data = await r.json();
+            if (data.ok && data.settings) {
+                return data.settings;
+            }
+        } catch(e) {}
+        return null;
+    }
+    // -------------------------------------------------
+
+    // -------------- Отступы -------------------------
+    const bezelThickness = 12;
+    const padding        = 40;
+    // -------------------------------------------------
+
+    // ─── Настройки дуг — читаем из редактора или дефолт ───
+    const ARC_DEFAULT = {
+        lineWidth:   3,
+        arrowSize:   25,
+        radiusExtra: 20,
+        colorRight: '#FFC04C',
+        colorLeft:  '#FF8970',
+    };
+    var ARC = Object.assign({}, ARC_DEFAULT);
+
+    // ─── CANVAS RESIZE ───────────────────────────────────────────────────────
+    const canvas = document.getElementById('myCanvas');
+    const ctx    = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        const wrap = canvas.parentElement;
+        const w = wrap.clientWidth;
+        const h = Math.round(w * ORIG_H / ORIG_W);
+        // Буфер канваса в физических пикселях — чёткость на HiDPI (Xiaomi ≈ 3x)
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width  = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        // CSS-размер = тот же, чтобы не было масштабирования браузером
+        canvas.style.width  = w + 'px';
+        canvas.style.height = h + 'px';
+        // Геометрия циферблата — фиксированные величины в ORIG-координатах
+        clockRadius   = (ORIG_W - 2 * padding) / 2 - 50;
+        clockCenterX  = ORIG_W / 2;
+        clockCenterY  = ORIG_H / 2 - 20;
+        numbersRadius = clockRadius - padding - 15;
+        displayCanvas();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Масштаб относительно оригинала
+    function scale() { return canvas.width / ORIG_W; }
+
+    // ─── DIGITAL CLOCK ───────────────────────────────────────────────────────
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function updateDigitalClock() {
+        const btn = document.getElementById('btnResume');
+        if (isGameMode) { btn.hidden = true; return; } // во время игры не перезаписываем
+        const el = document.getElementById('digitalClock');
+        const t  = document.getElementById('digitalTime');
+        btn.hidden = !isClockPaused;
+        if (isClockPaused) {
+            // На паузе показываем выставленное пальцем время, а не реальное
+            t.textContent = pad2(hour) + ':' + pad2(minute);
+            el.classList.add('paused');
+            return;
+        }
+        el.classList.remove('paused');
+        const now = new Date();
+        t.textContent = pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ':' + pad2(now.getSeconds());
+    }
+    function updateGameDigitalClock() {
+        document.getElementById('btnResume').hidden = true;
+        document.getElementById('digitalTime').textContent = pad2(hour % 12 || 12) + ':' + pad2(minute);
+    }
+    // Кнопка «↻ сейчас»: сразу вернуть реальное время, не дожидаясь 30 с простоя
+    function resumeClock() {
+        clearTimeout(idleTimeout);
+        startClock();
+    }
+    setInterval(updateDigitalClock, 1000);
+    updateDigitalClock();
+
+    // ─── START / STOP ────────────────────────────────────────────────────────
+    function tick() {
+        var d  = new Date();
+        hour   = d.getHours();
+        minute = d.getMinutes();
+        second = d.getSeconds();
+        displayCanvas();
+        showGermanTime();
+    }
+
+    function startClock() {
+        if (isGameMode) return;          // таймер простоя не должен запускать часы посреди игры
+        if (!clockInterval) {
+            isClockPaused = false;
+            tick();                      // сразу, без секундной задержки
+            clockInterval = setInterval(tick, 1000);
+        }
+    }
+
+    function stopClock() {
+        if (clockInterval) {
+            clearInterval(clockInterval);
+            clockInterval = null;
+            isClockPaused = true;
+        }
+    }
+
+    function resetIdleTimer() {
+        clearTimeout(idleTimeout);
+        idleTimeout = setTimeout(startClock, 30000);
+    }
+
+    function showGermanTime() {
+        var w = timeInWords(hour, minute);
+        // В игре часы 12-часовые (как на табло) → «zwölf Uhr fünfzehn», а не «null Uhr …»
+        var hOff = isGameMode ? (hour % 12 || 12) : hour;
+
+        document.getElementById('clock').textContent       = w.de;
+        document.getElementById('clock-exact').textContent = 'offiziell: ' + officialDe(hOff, minute);
+        document.getElementById('clock-ru').textContent    = w.ru;
+        updateDigitalClock();
+
+        // Авто-звук в обычном режиме — при смене времени (часа ИЛИ минуты).
+        // Раньше сравнивалась только минута, и перевод часовой стрелки молчал.
+        var timeKey = hour * 60 + minute;
+        if (!isGameMode && !isStoppingGame) {
+            var chkNorm = document.getElementById('chkNormalSpeak');
+            if (chkNorm && chkNorm.checked && timeKey !== lastSpokenKey) {
+                lastSpokenKey = timeKey;
+                setTimeout(speakTime, 200);
+            }
+        }
+    }
+
+    // ─── ОРИГИНАЛЬНЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (тени) ─────────────────────────
+    function clearShadow(context) {
+        context.shadowColor   = 'transparent';
+        context.shadowBlur    = 0;
+        context.shadowOffsetX = 0;
+        context.shadowOffsetY = 0;
+    }
+
+    // ─── ОРИГИНАЛЬНЫЙ ЦИФЕРБЛАТ (адаптирован под масштаб) ────────────────────
+
+    function drawArrowhead(context, x, y, angle, color) {
+        const size = ARC.arrowSize;
+        const lineAngle = 20 * (Math.PI / 180);
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x - size * Math.cos(angle + lineAngle), y - size * Math.sin(angle + lineAngle));
+        context.lineTo(x - size * Math.cos(angle - lineAngle), y - size * Math.sin(angle - lineAngle));
+        context.closePath();
+        context.fillStyle = color;
+        context.fill();
+    }
+
+    function getAngles(startHour, endHour) {
+        const startAngle = (startHour - 3) * (Math.PI / 6);
+        const endAngle   = (endHour   - 3) * (Math.PI / 6);
+        return { startAngle, endAngle };
+    }
+
+    function drawArcsWithTriangles(context, xCenter, yCenter, radius, arcPad) {
+        const right = { startHour: 12.05, endHour: 5,     color: ARC.colorRight };
+        const left  = { startHour: 7,     endHour: 11.95, color: ARC.colorLeft  };
+        const adjustedRadius = radius + ARC.radiusExtra + bezelThickness;
+
+        [right, left].forEach(({ startHour, endHour, color }) => {
+            const { startAngle, endAngle } = getAngles(startHour, endHour);
+            context.beginPath();
+            context.strokeStyle = color;
+            context.lineWidth   = ARC.lineWidth;
+            context.arc(xCenter, yCenter, adjustedRadius, startAngle, endAngle);
+            context.stroke();
+
+            const triangleX = xCenter + adjustedRadius * Math.cos(endAngle);
+            const triangleY = yCenter + adjustedRadius * Math.sin(endAngle);
+            const triangleAngle = Math.atan2(triangleY - yCenter, triangleX - xCenter);
+            drawArrowhead(context, triangleX, triangleY, triangleAngle + Math.PI / 2, color);
+        });
+    }
+
+    function drawSectors(context, xCenter, yCenter, radius) {
+        const sectors = [
+            { startHour: 6,  endHour: 7,  color: 'rgba(255, 242, 226, 0.3)' },
+            { startHour: 5,  endHour: 6,  color: 'rgba(255, 187, 165, 0.3)' },
+            { startHour: 7,  endHour: 12, color: 'rgba(255, 187, 165, 0.3)' },
+            { startHour: 12, endHour: 5,  color: 'rgba(255, 242, 226, 0.3)' },
+        ];
+        sectors.forEach(({ startHour, endHour, color }) => {
+            const { startAngle, endAngle } = getAngles(startHour, endHour);
+            context.beginPath();
+            context.fillStyle = color;
+            context.moveTo(xCenter, yCenter);
+            context.arc(xCenter, yCenter, radius, startAngle, endAngle);
+            context.lineTo(xCenter, yCenter);
+            context.fill();
+        });
+    }
+
+    function drawLinesFromCenter(context, xCenter, yCenter, radius) {
+        context.strokeStyle = '#000000';
+        context.lineWidth   = 1;   // ctx уже масштабирован
+        const hours = [7, 6, 5, 0];
+        hours.forEach(function(h) {
+            const angle = (h - 3) * (Math.PI / 6);
+            context.beginPath();
+            context.moveTo(xCenter, yCenter);
+            context.lineTo(xCenter + radius * Math.cos(angle), yCenter + radius * Math.sin(angle));
+            context.stroke();
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // КОНФИГУРАЦИЯ НАДПИСЕЙ — редактируй здесь или через редактор
+    // textHour  : позиция на циферблате (можно дробное, напр. 5.3)
+    // radius_k  : множитель радиуса (1.0 = прямо за безелем)
+    // rotDeg    : доворот в градусах (0 = вдоль окружности, -90 = горизонт. справа)
+    // color     : цвет надписи
+    // ═══════════════════════════════════════════════════════════════════
+    // Формат: lines — массив строк, каждая строка — массив {t, c}
+    // Читаем из редактора (localStorage) или используем дефолт
+    var CLOCK_TEXTS_DEFAULT = [
+        { textHour: 11.9, radius_k: 1.00, lines: [[{t:'...', c:'#888888'}, {t:'Uhr', c:'#aa2200'}]] },
+        { textHour:  1.1, radius_k: 1.05, lines: [[{t:'5 ', c:'#333333'}, {t:'nach ', c:'#B85000'}, {t:'...', c:'#888888'}]] },
+        { textHour:  2.2, radius_k: 1.12, lines: [[{t:'10 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  3.0, radius_k: 1.08, lines: [[{t:'Viertel ', c:'#333333'}], [{t:' nach', c:'#b85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  3.8, radius_k: 1.14, lines: [[{t:'20 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  4.7, radius_k: 1.11, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055aa'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  5.9, radius_k: 1.00, lines: [[{t:'halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  7.1, radius_k: 1.05, lines: [[{t:'5 ', c:'#333333'}, {t:'nach', c:'#B85000'}, {t:' halb', c:'#AA2200'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  8.1, radius_k: 1.09, lines: [[{t:'20 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour:  9.0, radius_k: 1.07, lines: [[{t:'Viertel ', c:'#333333'}], [{t:'vor', c:'#0055aa'}, {t:' ...  ', c:'#888888'}]] },
+        { textHour: 10.0, radius_k: 1.11, lines: [[{t:'10 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+        { textHour: 10.9, radius_k: 1.03, lines: [[{t:'5 ', c:'#333333'}, {t:'vor', c:'#0055AA'}, {t:' ...', c:'#888888'}]] },
+    ];
+    var CLOCK_TEXTS = CLOCK_TEXTS_DEFAULT.map(function(x){ return JSON.parse(JSON.stringify(x)); });
+
+    // Рисует строку слов с разными цветами
+    // Адаптация цветов надписей для тёмной темы
+    var COLOR_MAP_DARK = {
+        '#333333': '#cccccc',  // числа: почти белые
+        '#888888': '#aaaaaa',  // многоточия: серые
+        '#aa2200': '#ff6644',  // Uhr: ярко-оранжевый
+        '#b85000': '#ffaa44',  // nach: светло-оранжевый
+        '#0055aa': '#66aaff',  // vor: голубой
+    };
+
+    // #abc → #aabbcc, всё в нижний регистр
+    function normHex(col) {
+        col = String(col || '').trim().toLowerCase();
+        if (/^#[0-9a-f]{3}$/.test(col)) col = '#' + col[1] + col[1] + col[2] + col[2] + col[3] + col[3];
+        return col;
+    }
+
+    function adaptColor(col) {
+        if (!isDark) return col;
+        var c = normHex(col);
+        if (COLOR_MAP_DARK[c]) return COLOR_MAP_DARK[c];
+        // Любой другой тёмный цвет из редактора осветляем, иначе он пропадёт на тёмном фоне
+        if (!/^#[0-9a-f]{6}$/.test(c)) return col;
+        var r = parseInt(c.substr(1, 2), 16), g = parseInt(c.substr(3, 2), 16), b = parseInt(c.substr(5, 2), 16);
+        if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 >= 0.5) return col;
+        var mix = function(v) { return Math.round(v + (255 - v) * 0.55); };
+        return 'rgb(' + mix(r) + ',' + mix(g) + ',' + mix(b) + ')';
+    }
+
+    function drawColoredLine(context, words, cx, cy) {
+        var totalW = 0;
+        words.forEach(function(w) { totalW += context.measureText(w.t).width; });
+        var startX = cx - totalW / 2;
+        words.forEach(function(w) {
+            var ww = context.measureText(w.t).width;
+            context.fillStyle = adaptColor(w.c);
+            context.fillText(w.t, startX, cy);
+            startX += ww;
+        });
+    }
+
+    function drawText(context, xCenter, yCenter, radius, pad) {
+        const bezelOuter = radius + 12;
+        const gap        = 8;
+        const baseR      = bezelOuter + gap;
+        const fs         = Math.round(radius * 0.115);
+        const lineH      = fs * 1.3;
+
+        context.font         = `bold ${fs}px Arial`;
+        context.textAlign    = 'left';
+        context.textBaseline = 'middle';
+        clearShadow(context);
+
+        CLOCK_TEXTS.forEach(function(cfg) {
+            const posAngle = (cfg.textHour - 3) * Math.PI / 6;
+            const r        = baseR * cfg.radius_k;
+            const x        = xCenter + r * Math.cos(posAngle);
+            const y        = yCenter + r * Math.sin(posAngle);
+            const totalH   = (cfg.lines.length - 1) * lineH;
+            cfg.lines.forEach(function(line, i) {
+                drawColoredLine(context, line, x, y - totalH / 2 + i * lineH);
+            });
+        });
+    }
+
+    function drawHand(context, angle, length, xCenter, yCenter, width, color) {
+        context.beginPath();
+        context.lineWidth   = width;   // ctx уже масштабирован
+        context.strokeStyle = color;
+        context.lineCap     = 'round';
+        context.moveTo(xCenter, yCenter);
+        context.lineTo(
+            xCenter + length * Math.cos(angle - Math.PI / 2),
+            yCenter + length * Math.sin(angle - Math.PI / 2)
+        );
+        context.stroke();
+        context.closePath();
+    }
+
+    function displayCanvas() {
+        if (clockRadius === undefined) return;   // ещё не было resizeCanvas()
+        const s = scale();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.scale(s, s);
+
+        // ── Белый фон циферблата (всегда светлый, не зависит от темы страницы) ──
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI);
+        ctx.fillStyle = '#f5f0e8';
+        ctx.fill();
+        ctx.closePath();
+
+        // В тёмной теме — мягкое свечение вокруг циферблата
+        if (isDark) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,255,255,0.25)';
+            ctx.shadowBlur  = 30 * s;
+            ctx.beginPath();
+            ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(255,255,255,0.0)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        if (!isGameMode) {
+            drawArcsWithTriangles(ctx, clockCenterX, clockCenterY, clockRadius - padding, 0);
+            drawSectors(ctx, clockCenterX, clockCenterY, clockRadius - padding);
+            drawLinesFromCenter(ctx, clockCenterX, clockCenterY, clockRadius - padding);
+            drawText(ctx, clockCenterX, clockCenterY, clockRadius, padding);
+        }
+
+        // Деления
+        for (var tm = 0; tm < 60; tm++) {
+            ctx.beginPath();
+            ctx.strokeStyle = tm % 15 === 0 ? '#000000' : (tm % 5 === 0 ? '#000000' : '#666666');
+            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : '#cccccc';
+            if (tm % 15 === 0) {
+                ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+            } else {
+                ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+            }
+            if (tm % 15 === 0) {
+                ctx.lineWidth = 2;
+                var rp  = 5;
+                var xPM = clockCenterX + numbersRadius * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yPM = clockCenterY - numbersRadius * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                ctx.arc(xPM, yPM, rp, 0, 2 * Math.PI, true);
+                ctx.fill(); ctx.stroke();
+            } else {
+                var lineLength = tm % 5 === 0 ? 10 : 6;
+                var offset     = lineLength === 6 ? 3 : 6;
+                var xStart = clockCenterX + (numbersRadius - offset) * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yStart = clockCenterY - (numbersRadius - offset) * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var xEnd   = clockCenterX + (numbersRadius - offset + lineLength) * Math.cos(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                var yEnd   = clockCenterY - (numbersRadius - offset + lineLength) * Math.sin(-6 * tm * (Math.PI / 180) + Math.PI / 2);
+                ctx.lineWidth = tm % 5 === 0 ? 3.5 : 2.5;
+                ctx.moveTo(xStart, yStart);
+                ctx.lineTo(xEnd, yEnd);
+                ctx.stroke();
+            }
+            ctx.closePath();
+        }
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        // Цифры
+        for (var th = 1; th <= 12; th++) {
+            ctx.beginPath();
+            ctx.font         = 'bold 32px Tahoma';
+            ctx.textAlign    = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle    = '#111111'; // цифры всегда тёмные — фон циферблата белый
+            var xT = clockCenterX + (numbersRadius - 30) * Math.cos(-30 * th * (Math.PI / 180) + Math.PI / 2);
+            var yT = clockCenterY - (numbersRadius - 30) * Math.sin(-30 * th * (Math.PI / 180) + Math.PI / 2);
+            ctx.fillText(th, xT, yT);
+            ctx.closePath();
+        }
+
+        // Тень для стрелок
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+        var handColor = '#000000';
+        drawHand(ctx, (hour % 12 + minute / 60) * (Math.PI / 6), numbersRadius / 1.4, clockCenterX, clockCenterY, 6, handColor);
+        drawHand(ctx, minute * (Math.PI / 30), numbersRadius - 10, clockCenterX, clockCenterY, 4, handColor);
+        if (!isClockPaused) {
+            drawHand(ctx, second * (Math.PI / 30), numbersRadius - 20, clockCenterX, clockCenterY, 2, 'red');
+        }
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        // Центральная точка
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.strokeStyle = '#000000'; ctx.fillStyle = '#CCCCCC'; ctx.lineWidth = 3;
+        ctx.arc(clockCenterX, clockCenterY, 6, 0, 2 * Math.PI, true);
+        ctx.stroke(); ctx.fill(); ctx.closePath();
+        ctx.restore();
+
+        // Безель
+        const bezelInnerRadius = clockRadius - padding;
+        const bezelOuterRadius = bezelInnerRadius + bezelThickness;
+        var bezelGradient = ctx.createRadialGradient(
+            clockCenterX, clockCenterY, bezelInnerRadius,
+            clockCenterX, clockCenterY, bezelOuterRadius
+        );
+        bezelGradient.addColorStop(0,   '#333333');
+        bezelGradient.addColorStop(0.2, '#707070');
+        bezelGradient.addColorStop(0.5, '#505050');
+        bezelGradient.addColorStop(1,   '#000000');
+        ctx.save();
+        ctx.shadowBlur = 5; ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 4;
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius - bezelThickness / 2, 0, 2 * Math.PI, true);
+        ctx.lineWidth   = bezelThickness;
+        ctx.strokeStyle = bezelGradient;
+        ctx.stroke(); ctx.closePath();
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, bezelInnerRadius, 0, 2 * Math.PI, true);
+        ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius, 0, 2 * Math.PI, true);
+        ctx.lineWidth = 1; ctx.strokeStyle = '#000000'; ctx.stroke(); ctx.closePath();
+        // В тёмной теме — светлая обводка вокруг безеля для отделения от фона
+        if (isDark) {
+            ctx.beginPath();
+            ctx.arc(clockCenterX, clockCenterY, bezelOuterRadius + 2, 0, 2 * Math.PI, true);
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        // Стекло и блики — интенсивность зависит от темы
+        var glowA = isDark ? 0.06 : 0.35;
+        var hlA   = isDark ? 0.12 : 0.9;
+        var hl2A  = isDark ? 0.06 : 0.3;
+        var hl3A  = isDark ? 0.08 : 0.5;
+        var hl4A  = isDark ? 0.04 : 0.15;
+
+        var glassGradient = ctx.createRadialGradient(
+            clockCenterX, clockCenterY, clockRadius / 3,
+            clockCenterX, clockCenterY, clockRadius
+        );
+        glassGradient.addColorStop(0,   'rgba(255,255,255,' + glowA + ')');
+        glassGradient.addColorStop(0.4, 'rgba(200,200,200,' + (glowA * 0.57) + ')');
+        glassGradient.addColorStop(0.7, 'rgba(50,50,50,0.1)');
+        glassGradient.addColorStop(1,   'rgba(0,0,0,0.25)');
+        ctx.beginPath();
+        ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI, true);
+        ctx.fillStyle = glassGradient; ctx.fill(); ctx.closePath();
+
+        // Блик главный
+        ctx.beginPath();
+        var hlGrad = ctx.createRadialGradient(
+            clockCenterX - clockRadius / 3, clockCenterY - clockRadius / 3, 0,
+            clockCenterX - clockRadius / 3, clockCenterY - clockRadius / 3, clockRadius / 4
+        );
+        hlGrad.addColorStop(0, 'rgba(255,255,255,' + hlA + ')');
+        hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = hlGrad;
+        ctx.arc(clockCenterX - clockRadius / 3, clockCenterY - clockRadius / 3, clockRadius / 4, 0, 2 * Math.PI, true);
+        ctx.fill(); ctx.closePath();
+
+        // Вторичный блик
+        ctx.beginPath();
+        ctx.ellipse(clockCenterX + clockRadius / 6, clockCenterY + clockRadius / 4,
+                    clockRadius / 5, clockRadius / 12, Math.PI / 4, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,255,255,' + hl2A + ')'; ctx.fill(); ctx.closePath();
+
+        // Тень по краям стекла
+        ctx.beginPath();
+        var edgeGrad = ctx.createRadialGradient(
+            clockCenterX, clockCenterY, clockRadius - padding - 5,
+            clockCenterX, clockCenterY, clockRadius - padding
+        );
+        edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        edgeGrad.addColorStop(1, 'rgba(0,0,0,0.2)');
+        ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI, true);
+        ctx.fillStyle = edgeGrad; ctx.fill(); ctx.closePath();
+
+        // Маленький верхний блик
+        ctx.beginPath();
+        ctx.arc(clockCenterX - clockRadius / 4, clockCenterY - clockRadius / 3, clockRadius / 12, 0, 2 * Math.PI, true);
+        ctx.fillStyle = 'rgba(255,255,255,' + hl3A + ')'; ctx.fill(); ctx.closePath();
+
+        // Нижний блик
+        ctx.beginPath();
+        ctx.ellipse(clockCenterX, clockCenterY + clockRadius / 3, clockRadius / 3, clockRadius / 15, 0, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255,255,255,' + hl4A + ')'; ctx.fill(); ctx.closePath();
+
+        ctx.restore(); // снимаем scale(s, s)
+    }
+
+    // ─── TOUCH / CLICK ───────────────────────────────────────────────────────
+    function isTouchDevice() {
+        return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    }
+
+    function handleInteraction(clientX, clientY) {
+        if (isGameMode) return;   // в игре циферблат не трогаем — иначе таймер простоя запустит часы
+        var rect = canvas.getBoundingClientRect();
+        var scX  = ORIG_W / rect.width;
+        var scY  = ORIG_H / rect.height;
+
+        // Используем те же глобальные координаты центра, что и displayCanvas
+        var x = (clientX - rect.left) * scX - clockCenterX;
+        var y = (clientY - rect.top)  * scY - clockCenterY;
+
+        var dist        = Math.sqrt(x * x + y * y);
+        var radiusClock = clockRadius - padding;
+
+        if (dist > radiusClock) return;
+
+        stopClock();
+        resetIdleTimer();
+
+        var angle   = Math.atan2(y, x);
+        var degrees = ((angle * 180 / Math.PI) + 90 + 360) % 360;
+
+        var tolerance           = isTouchDevice() ? 20 : 15;
+        var adjustedInnerRadius = 120 - padding - tolerance;
+        var adjustedOuterRadius = 220 - padding + tolerance;
+
+        if (dist < adjustedInnerRadius + tolerance) {
+            // сохраняем половину суток, чтобы «offiziell» оставалось осмысленным
+            hour = Math.round(degrees / 30) % 12 + (hour >= 12 ? 12 : 0);
+        } else if (dist >= adjustedInnerRadius - tolerance && dist <= adjustedOuterRadius + tolerance) {
+            minute = Math.round(degrees / 6) % 60;
+        }
+
+        displayCanvas();
+        showGermanTime();
+    }
+
+    canvas.addEventListener('click', function(e) {
+        handleInteraction(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        var t = e.changedTouches[0];
+        handleInteraction(t.clientX, t.clientY);
+    }, { passive: false });
+
+    // ─── ИГРОВОЙ РЕЖИМ ────────────────────────────────────────────────────────
+    var gameInterval  = null;  // интервал таймера
+    var gameCountdown = 0;     // секунды до конца фазы
+    var isGameMode    = false;
+    var isStoppingGame  = false; // подавляет авто-звук при выходе из игры
+    var lastSpokenKey = -1;     // последнее озвученное время, часы*60+минуты (обычный режим)
+
+    // ─── SVG ТАЙМЕР ──────────────────────────────────────────────────────────
+    var CIRCUMFERENCE = 2 * Math.PI * 30; // 188.5
+
+    function setTimerArc(current, total) {
+        var offset = CIRCUMFERENCE * (1 - current / total);
+        document.getElementById('timerArc').style.strokeDashoffset = offset;
+        document.getElementById('timerNum').textContent = current;
+        // цвет по значению
+        var color = current >= 4 ? '#2ecc71' : current >= 2 ? '#f39c12' : '#e74c3c';
+        document.getElementById('timerArc').style.stroke = color;
+        document.getElementById('timerNum').style.fill   = color;
+    }
+
+    // Скрываем/показываем элементы нормального режима
+    function setGameUI(active) {
+        isGameMode = active;
+        document.getElementById('clock').style.visibility    = active ? 'hidden' : 'visible';
+        document.getElementById('btnSpeak').style.visibility  = active ? 'hidden' : 'visible';
+        document.getElementById('clock-ru').style.visibility = active ? 'hidden' : 'visible';
+        document.getElementById('clock-exact').style.visibility = active ? 'hidden' : 'visible';
+        document.getElementById('hintText').style.visibility  = active ? 'hidden' : 'visible';
+        document.getElementById('btnStart').style.visibility  = active ? 'hidden' : 'visible';
+        document.getElementById('btnStop').style.visibility   = active ? 'visible' : 'hidden';
+        document.getElementById('gamePhaseWrap').style.display = active ? 'flex' : 'none';
+        if (active) positionTimer();
+        document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
+        // баннер установки не должен закрывать игру
+        if (window.uhrzeitInstall) {
+            if (active) window.uhrzeitInstall.hide();
+            else if (window.uhrzeitInstall.resume) window.uhrzeitInstall.resume();
+        }
+        document.getElementById('gameSettings').style.display      = active ? 'flex' : 'none';
+        document.getElementById('normalSpeakWrap').style.display   = active ? 'none' : 'flex';
+        // Скрываем/показываем надписи и дуги на циферблате через флаг
+        displayCanvas();
+    }
+
+    // Таймер-оверлей — сразу под цифровыми часами
+    function positionTimer() {
+        var r = document.getElementById('digitalClock').getBoundingClientRect();
+        document.getElementById('gamePhaseWrap').style.paddingTop = (r.bottom + 6) + 'px';
+    }
+
+    // Случайное время с шагом 5 минут
+    function randomTime() {
+        var h = Math.floor(Math.random() * 12);
+        var m = Math.floor(Math.random() * 12) * 5;
+        return { h: h, m: m };
+    }
+
+    function startGame() {
+        clearTimeout(idleTimeout);  // иначе через 30 с после тапа часы стартуют посреди игры
+        stopClock();           // останавливаем реальные часы
+        setGameUI(true);
+        runQuestion();
+    }
+
+    function stopGame() {
+        clearInterval(gameInterval);
+        clearTimeout(gameInterval);
+        gameInterval = null;
+        stopSpeech();           // останавливаем речь (mp3 и системную)
+        isStoppingGame = true;  // запрещаем авто-звук при восстановлении
+        setGameUI(false);
+        // Восстанавливаем реальное время (tick() внутри startClock)
+        startClock();
+        isStoppingGame    = false; // снова разрешаем авто-звук
+        // текущее время считаем уже «озвученным» — заговорим при следующей смене, а не через секунду
+        lastSpokenKey = hour * 60 + minute;
+    }
+
+    function runQuestion() {
+        var t = randomTime();
+        hour   = t.h;
+        minute = t.m;
+        second = 0;
+
+        document.getElementById('clock').style.visibility       = 'hidden';
+        document.getElementById('clock-ru').style.visibility    = 'hidden';
+        document.getElementById('clock-exact').style.visibility = 'hidden';
+        document.getElementById('gamePhaseWrap').style.display  = 'flex';
+        positionTimer();
+
+        displayCanvas();
+        updateGameDigitalClock();
+
+        var dur = parseInt((document.querySelector('input[name="timerDur"]:checked') || {value:'5'}).value);
+        gameCountdown = dur;
+        setTimerArc(gameCountdown, dur);
+        clearInterval(gameInterval);
+        gameInterval = setInterval(function() {
+            gameCountdown--;
+            setTimerArc(gameCountdown, dur);
+            if (gameCountdown <= 0) {
+                clearInterval(gameInterval);
+                runAnswer();
+            }
+        }, 1000);
+    }
+
+    function runAnswer() {
+        showGermanTime();
+        document.getElementById('clock').style.visibility       = 'visible';
+        document.getElementById('clock-ru').style.visibility    = 'visible';
+        document.getElementById('clock-exact').style.visibility = 'visible';
+        // скрываем таймер во время показа ответа
+        document.getElementById('gamePhaseWrap').style.display = 'none';
+        clearInterval(gameInterval);
+        // Авто-звук если чекбокс включён — небольшая задержка чтобы текст успел появиться
+        var autoSpeak = document.getElementById('chkAutoSpeak');
+        if (autoSpeak && autoSpeak.checked) {
+            setTimeout(speakTime, 400);
+        }
+        gameInterval = setTimeout(function() {
+            runQuestion();
+        }, 3000);
+    }
+
+
+    // ── 🔊 Произношение времени (Web Speech API) ────────────────────────────
+    var speechSupported = ('speechSynthesis' in window);
+    var deVoice = null;
+    // На Android список голосов приходит асинхронно — кэшируем по событию
+    function pickDeVoice() {
+        var voices = window.speechSynthesis.getVoices();
+        deVoice = voices.find(function(v) { return v.lang === 'de-DE'; })
+               || voices.find(function(v) { return v.lang.startsWith('de'); })
+               || null;
+    }
+    if (speechSupported) {
+        pickDeVoice();
+        window.speechSynthesis.addEventListener('voiceschanged', pickDeVoice);
+    }
+
+    // ── Озвучка: записанный голос (voice/de/<голос>/HH-MM.mp3) → иначе системный ──
+    // Файлы создаются на странице voicegen.html. Для «gleich / kurz nach» и
+    // пока не записанных фраз остаётся системный голос.
+    var VOICE_DIR = 'voice/de/laura/';   // папка выбранного голоса; у каждого голоса своя
+    var voiceMissing = {};          // key → true, если файла нет (не стучимся повторно)
+    var voiceAudio = null;
+
+    function stopSpeech() {
+        if (voiceAudio) { try { voiceAudio.pause(); } catch (e) {} voiceAudio = null; }
+        if (speechSupported) window.speechSynthesis.cancel();
+    }
+
+    function speakTime() {
+        var text = document.getElementById('clock').textContent;
+        if (!text || text.trim() === '') return;
+        stopSpeech();
+        var key = voiceKey(hour, minute);
+        if (key && !voiceMissing[key]) {
+            var a = new Audio(VOICE_DIR + key + '.mp3');
+            voiceAudio = a;
+            var fallback = function () {
+                if (voiceAudio !== a) return;          // уже запущена другая фраза
+                voiceMissing[key] = true;
+                voiceAudio = null;
+                speakSystem(text);
+            };
+            a.addEventListener('error', fallback);
+            var pr = a.play();
+            if (pr && pr.catch) pr.catch(function (e) {
+                // NotAllowedError — браузер запретил автозапуск без касания; системный голос тоже не сможет
+                if (e && e.name === 'NotAllowedError') return;
+                fallback();
+            });
+            return;
+        }
+        speakSystem(text);
+    }
+
+    function speakSystem(text) {
+        if (!speechSupported) return;
+        window.speechSynthesis.cancel();
+        var utt = new SpeechSynthesisUtterance(text);
+        utt.lang = 'de-DE';
+        utt.rate = 0.9;
+        if (!deVoice) pickDeVoice();
+        if (deVoice) utt.voice = deVoice;
+        window.speechSynthesis.speak(utt);
+    }
+
+    // Показываем кнопку только если Speech API доступен
+
+    // ── Тема ──────────────────────────────────────────────────────────────────
+    var isDark = false;
+
+    function applyTheme(dark) {
+        isDark = dark;
+        document.documentElement.classList.toggle('dark',  dark);
+        document.documentElement.classList.toggle('light', !dark);
+        document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
+        syncThemeColor();
+        displayCanvas();
+    }
+
+    // ── Цвет системной панели ──
+    // Установленное приложение: панель всегда тёмная — цвет задан в manifest
+    // (theme_color #1a1a1a), страница его не меняет. От theme-color здесь зависит
+    // только цвет значков, поэтому держим его тёмным → значки белые и видны.
+    // В обычной вкладке браузера адресная строка следует теме приложения.
+    var mqStandalone = window.matchMedia ? window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)') : null;
+    function syncThemeColor() {
+        var standalone = !!(mqStandalone && mqStandalone.matches) || navigator.standalone === true;
+        var color = (standalone || isDark) ? '#1a1a1a' : '#ffffff';
+        document.getElementById('themeColorMeta').setAttribute('content', color);
+    }
+
+    function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+
+    function toggleTheme() {
+        applyTheme(!isDark);
+        lsSet('uhrzeit_theme', isDark ? 'dark' : 'light');   // запоминаем только ручной выбор
+    }
+
+    // Инициализация темы — вызывается из load
+
+    window.addEventListener('load', function() {
+        // Тема
+        var saved = lsGet('uhrzeit_theme');
+        if (saved) {
+            applyTheme(saved === 'dark');
+        } else {
+            applyTheme(!!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+        }
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                if (!lsGet('uhrzeit_theme')) applyTheme(e.matches);
+            });
+        }
+        // Кнопка 🔊 видна всегда: записанный голос работает и без Speech API
+        document.getElementById('btnSpeak').style.display = 'inline-block';
+    });
+
+    window.addEventListener('load', async function() {
+        resizeCanvas();
+        startClock();   // часы идут сразу, не дожидаясь GitHub
+
+        // Настройки надписей подгружаем в фоне и перерисовываем
+        var saved = await loadSettingsFromGitHub();
+        if (saved) {
+            var t = saved.CLOCK_TEXTS;
+            if (Array.isArray(t) && (t.length === 0 || (t[0] && Array.isArray(t[0].lines)))) {
+                CLOCK_TEXTS = t;
+            }
+            if (saved.ARC && typeof saved.ARC === 'object') Object.assign(ARC, saved.ARC);
+            displayCanvas();
+        }
+    });
+</script>
+<script>
+// ── Скрытый вход в озвучку: удерживать заголовок 1,5 с ──
+// Дальше voicegen.html сам спросит пароль (если вход ещё не выполнен в этой сессии).
+(function () {
+    var el = document.getElementById('appTitle');
+    var HOLD_MS = 1500;
+    var timer = null, sx = 0, sy = 0;
+
+    // без выделения текста и системного меню при долгом нажатии
+    el.style.userSelect = 'none';
+    el.style.webkitUserSelect = 'none';
+    el.style.webkitTouchCallout = 'none';
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    function cancel() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        el.style.transition = 'opacity .2s';
+        el.style.opacity = '';
+    }
+    function start(x, y) {
+        if (typeof isGameMode !== 'undefined' && isGameMode) return;
+        cancel();
+        sx = x; sy = y;
+        // лёгкое затухание — подсказка, что удержание засчитывается
+        el.style.transition = 'opacity ' + HOLD_MS + 'ms linear';
+        el.style.opacity = '0.35';
+        timer = setTimeout(function () {
+            timer = null;
+            if (navigator.vibrate) navigator.vibrate(30);
+            location.href = 'voicegen.html';
+        }, HOLD_MS);
+    }
+    function moved(x, y) {
+        if (timer && (Math.abs(x - sx) > 12 || Math.abs(y - sy) > 12)) cancel();
+    }
+
+    el.addEventListener('pointerdown', function (e) { start(e.clientX, e.clientY); });
+    el.addEventListener('pointermove', function (e) { moved(e.clientX, e.clientY); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { el.addEventListener(t, cancel); });
+    // вернулись кнопкой «Назад» — заголовок снова обычный
+    window.addEventListener('pageshow', cancel);
+})();
+</script>
+<script src="install.js"></script>
+<script src="console.js"></script>
+</body>
+</html>

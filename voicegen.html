@@ -310,6 +310,7 @@
     <!-- запись -->
     <div class="card">
         <h2>Запись всех фраз (144)</h2>
+        <div class="hint" id="dirNote" style="margin-bottom:8px"></div>
         <button class="ghost" id="btnCheck">1 · Проверить, что уже есть</button>
         <div class="chk">
             <input type="checkbox" id="redo">
@@ -330,7 +331,7 @@
     </div>
 
     <div class="card hint" style="line-height:1.5">
-        Файлы: <code>voice/de/uhr/ЧЧ-ММ.mp3</code> в репозитории, настройки каждой фразы — в <code>voice.json</code>.
+        Файлы: <code>voice/de/&lt;голос&gt;/ЧЧ-ММ.mp3</code> в репозитории, настройки каждой фразы — в <code>voice.json</code> той же папки.
         Часы берут запись для ровных 5 минут, остальное читает системный голос.
         После коммита Vercel пересобирает сайт около минуты — до этого проверка покажет «нет».
     </div>
@@ -351,7 +352,13 @@
         for (var i = 0; i < voices.length; i++) if (voices[i].id === id) return voices[i];
         return null;
     }
-    var DIR = 'voice/de/uhr/';
+    // Каждый голос — своя папка: voice/de/laura/, voice/de/roger/ …
+    // Часы потом смогут переключаться между ними.
+    function slugOf(name) {
+        return String(name || '').split(' - ')[0].trim().toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'voice';
+    }
+    function DIR() { return 'voice/de/' + slugOf(voiceName) + '/'; }
     var CTX_BEFORE = 'Entschuldigung, wie spät ist es?';
     // Настроение для v3: на кнопке — понятное название, в модель уходит код
     var TAGS = [
@@ -393,10 +400,13 @@
     ITEMS.forEach(function (it) { byKey[it.key] = it; });
 
     var token = '';
-    var onSite = {};      // key → true
-    var fresh = {};       // key → { audio(base64), settings }
-    var committed = {};   // key → { audio, settings } — записано, ждёт деплоя
-    var meta = { files: {} };  // voice.json с сайта
+    // Состояние на каждую папку: что есть на сайте, что озвучено, что записано
+    var BY_SLUG = {};
+    function st() {
+        var k = slugOf(voiceName);
+        if (!BY_SLUG[k]) BY_SLUG[k] = { onSite: {}, fresh: {}, committed: {}, meta: { files: {} }, checked: false };
+        return BY_SLUG[k];
+    }
     var filter = 'all';
     var quota = null;
     var keyIndex = 0;        // аккаунт ElevenLabs, с которого начинаем
@@ -570,6 +580,15 @@
             (fromLib ? '<br><b style="color:var(--orange)">Голос из библиотеки: на бесплатном плане API его не озвучит (ошибка 402)</b>' : '');
     }
 
+    // Сменили голос — это другая папка: свой список фраз и свои настройки записи
+    function onVoiceChanged() {
+        renderVoices();
+        showSettings();
+        loadMeta();
+        render();
+        log('папка озвучки: ' + DIR(), 'new');
+    }
+
     async function loadVoices() {
         var btn = $('btnVoices');
         busy(btn, '…');
@@ -603,8 +622,7 @@
         var v = voiceById(voiceId);
         if (v) voiceName = v.name;
         $('voiceList').hidden = true;
-        renderVoices();
-        showSettings();
+        onVoiceChanged();
     });
 
     // ── библиотека голосов ──
@@ -828,7 +846,7 @@
         var s = readSettings();
         var redo = $('redo').checked;
         return ITEMS.reduce(function (n, it) {
-            if (!redo && (onSite[it.key] || fresh[it.key] || committed[it.key])) return n;
+            if (!redo && (st().onSite[it.key] || st().fresh[it.key] || st().committed[it.key])) return n;
             return n + phrase(it.key, s).length;
         }, 0);
     }
@@ -970,7 +988,7 @@
         player.play().catch(function () {});
     }
     function playSite(key) {
-        player.src = DIR + key + '.mp3?t=' + Date.now();
+        player.src = DIR() + key + '.mp3?t=' + Date.now();
         player.play().catch(function () { log('не удалось проиграть ' + key + '.mp3', 'err'); });
     }
 
@@ -1015,16 +1033,16 @@
     // ── что уже есть на сайте ───────────────────────────────
     async function loadMeta() {
         try {
-            var r = await fetch(DIR + 'voice.json', { cache: 'no-store' });
+            var r = await fetch(DIR() + 'voice.json', { cache: 'no-store' });
             if (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0) {
                 var d = await r.json();
-                if (d && d.files) { meta = d; render(); }
+                if (d && d.files) { st().meta = d; render(); }
             }
         } catch (e) {}
     }
     async function exists(key) {
         try {
-            var r = await fetch(DIR + key + '.mp3', { method: 'HEAD', cache: 'no-store' });
+            var r = await fetch(DIR() + key + '.mp3', { method: 'HEAD', cache: 'no-store' });
             var ct = r.headers.get('content-type') || '';
             return r.ok && (ct.indexOf('audio') >= 0 || ct.indexOf('octet-stream') >= 0);
         } catch (e) { return false; }
@@ -1035,13 +1053,14 @@
         async function worker() {
             while (queue.length) {
                 var it = queue.shift();
-                if (await exists(it.key)) { onSite[it.key] = true; have++; } else { delete onSite[it.key]; }
+                if (await exists(it.key)) { st().onSite[it.key] = true; have++; } else { delete st().onSite[it.key]; }
                 n++;
                 $('fill').style.width = (n / ITEMS.length * 100) + '%';
                 $('btnCheck').textContent = 'проверяю… ' + n + ' / ' + ITEMS.length;
             }
         }
         await Promise.all([worker(), worker(), worker(), worker()]);
+        st().checked = true;
         await loadMeta();
         render();
         paintQuota();
@@ -1054,13 +1073,13 @@
     var stopFlag = false;
     async function genOne(key, s) {
         try {
-            fresh[key] = { audio: await speak(key, s), s: s };
+            st().fresh[key] = { audio: await speak(key, s), s: s };
             return true;
         } catch (e) {
             if (e.auth) throw e;
             await sleep(1500);   // чаще всего 429 — просто подождать
             try {
-                fresh[key] = { audio: await speak(key, s), s: s };
+                st().fresh[key] = { audio: await speak(key, s), s: s };
                 log('↻ ' + byKey[key].time + ' — со второй попытки', 'new');
                 return true;
             } catch (e2) {
@@ -1074,10 +1093,10 @@
         if ($('btnGen').dataset.running) { stopFlag = true; return; }
         var redo = $('redo').checked;
         var todo = ITEMS.filter(function (it) {
-            return redo || (!onSite[it.key] && !fresh[it.key] && !committed[it.key]);
+            return redo || (!st().onSite[it.key] && !st().fresh[it.key] && !st().committed[it.key]);
         });
         if (!todo.length) { log('нечего озвучивать — всё уже есть', 'ok'); return; }
-        if (!Object.keys(onSite).length && !redo &&
+        if (!st().checked && !redo &&
             !confirm('Проверка «что уже есть» ещё не запускалась — озвучить все ' + todo.length + ' фраз?')) return;
 
         var s = readSettings();
@@ -1111,16 +1130,16 @@
         if (!b) return;
         var key = b.dataset.key;
         if (b.dataset.act === 'site') playSite(key);
-        if (b.dataset.act === 'fresh') playB64((fresh[key] || committed[key]).audio);
+        if (b.dataset.act === 'fresh') playB64((st().fresh[key] || st().committed[key]).audio);
         if (b.dataset.act === 'redo') {
             b.disabled = true; b.textContent = '…';
             try {
-                if (await genOne(key, readSettings())) { playB64(fresh[key].audio); log('↻ ' + byKey[key].time + ' переозвучено', 'new'); }
+                if (await genOne(key, readSettings())) { playB64(st().fresh[key].audio); log('↻ ' + byKey[key].time + ' переозвучено', 'new'); }
             } catch (err) {}
             render();
             loadQuota();
         }
-        if (b.dataset.act === 'drop') { delete fresh[key]; render(); }
+        if (b.dataset.act === 'drop') { delete st().fresh[key]; render(); }
     });
 
     // ── коммит ──────────────────────────────────────────────
@@ -1141,22 +1160,22 @@
     }
 
     $('btnPub').addEventListener('click', async function () {
-        var keys = Object.keys(fresh);
+        var keys = Object.keys(st().fresh);
         if (!keys.length) return;
         busy($('btnPub'), 'заливаю…');
         try {
             // метаданные: какими настройками записана каждая фраза
-            var m = JSON.parse(JSON.stringify(meta || { files: {} }));
+            var m = JSON.parse(JSON.stringify(st().meta || { files: {} }));
             m.files = m.files || {};
             keys.forEach(function (k) {
-                var s = fresh[k].s;
+                var s = st().fresh[k].s;
                 m.files[k] = { text: phrase(k, s), voice: s.voice, model: s.model, stability: s.stability,
                                similarity: s.similarity_boost, style: s.style, speed: s.speed,
                                ctx: s.ctx, date: new Date().toISOString().slice(0, 10) };
             });
             m.updated = new Date().toISOString();
-            var files = keys.map(function (k) { return { path: DIR + k + '.mp3', content: fresh[k].audio }; });
-            files.push({ path: DIR + 'voice.json', content: b64utf8(JSON.stringify(m, null, 1)) });
+            var files = keys.map(function (k) { return { path: DIR() + k + '.mp3', content: st().fresh[k].audio }; });
+            files.push({ path: DIR() + 'voice.json', content: b64utf8(JSON.stringify(m, null, 1)) });
 
             // пачки до ~3 МБ — лимит запроса Vercel 4,5 МБ
             var batches = [], cur = [], size = 0;
@@ -1179,7 +1198,7 @@
                     ' — они останутся в «новых», повтори коммит', 'err');
             }
             var okKeys = tree.map(function (t) { return t.path.split('/').pop().replace('.mp3', ''); })
-                             .filter(function (k) { return fresh[k]; });
+                             .filter(function (k) { return st().fresh[k]; });
             if (!okKeys.length) throw new Error('ни один файл не залился');
             // voice.json пишем, только если он долетел
             tree = tree.filter(function (t) { return /voice\.json$/.test(t.path) || okKeys.indexOf(t.path.split('/').pop().replace('.mp3', '')) >= 0; });
@@ -1193,8 +1212,8 @@
                 await sleep(1500);   // ветка могла уйти вперёд — одна повторная попытка
                 c = await postCommit({ action: 'commit', tree: tree, message: 'Озвучка времени: ' + okKeys.length + ' фраз' });
             }
-            okKeys.forEach(function (k) { committed[k] = fresh[k]; delete fresh[k]; });
-            meta = m;
+            okKeys.forEach(function (k) { st().committed[k] = st().fresh[k]; delete st().fresh[k]; });
+            st().meta = m;
             $('fill').style.width = '100%';
             log('записано одним коммитом: ' + okKeys.length + ' фраз (' + c.commit.slice(0, 7) + '). Через ~1 мин появятся на сайте.', 'ok');
         } catch (e) {
@@ -1213,14 +1232,18 @@
     });
 
     function state(key) {
-        if (fresh[key]) return 'fresh';
-        if (committed[key]) return 'done';
-        if (onSite[key]) return 'have';
+        if (st().fresh[key]) return 'fresh';
+        if (st().committed[key]) return 'done';
+        if (st().onSite[key]) return 'have';
         return 'miss';
     }
 
     function render() {
-        var nFresh = Object.keys(fresh).length;
+        var have = ITEMS.filter(function (it) { return state(it.key) !== 'miss'; }).length;
+        $('dirNote').innerHTML = 'Папка <b>' + DIR() + '</b> · готово ' + have + ' из ' + ITEMS.length +
+            '<br>У каждого голоса своя папка — часы потом смогут переключаться между ними.';
+
+        var nFresh = Object.keys(st().fresh).length;
         // пока идёт озвучка, коммит недоступен — иначе запишется половина
         $('btnPub').disabled = !nFresh || !!$('btnGen').dataset.running;
         $('btnPub').textContent = nFresh ? '3 · Записать одним коммитом (' + nFresh + ')' : '3 · Записать одним коммитом';
@@ -1228,32 +1251,34 @@
 
         var html = '';
         ITEMS.forEach(function (it) {
-            var st = state(it.key);
-            if (filter !== 'all' && !(filter === st || (filter === 'have' && st === 'done'))) return;
-            var info = fresh[it.key] ? describe(fresh[it.key].s)
-                     : (meta.files && meta.files[it.key]) ? describe({
-                           voice: meta.files[it.key].voice, model: meta.files[it.key].model,
-                           stability: meta.files[it.key].stability, style: meta.files[it.key].style,
-                           speed: meta.files[it.key].speed, ctx: meta.files[it.key].ctx,
-                           tags: (meta.files[it.key].text || '').match(/^(\[[^\]]+\]\s*)+/) ? meta.files[it.key].text.match(/^(\[[^\]]+\]\s*)+/)[0].trim() : ''
+            var stt = state(it.key);
+            if (filter !== 'all' && !(filter === stt || (filter === 'have' && stt === 'done'))) return;
+            var info = st().fresh[it.key] ? describe(st().fresh[it.key].s)
+                     : (st().meta.files && st().meta.files[it.key]) ? describe({
+                           voice: st().meta.files[it.key].voice, model: st().meta.files[it.key].model,
+                           stability: st().meta.files[it.key].stability, style: st().meta.files[it.key].style,
+                           speed: st().meta.files[it.key].speed, ctx: st().meta.files[it.key].ctx,
+                           tags: (st().meta.files[it.key].text || '').match(/^(\[[^\]]+\]\s*)+/) ? st().meta.files[it.key].text.match(/^(\[[^\]]+\]\s*)+/)[0].trim() : ''
                        })
                      : '';
-            var label = { have: 'есть', fresh: 'новое', miss: 'нет', done: 'записано' }[st];
+            var label = { have: 'есть', fresh: 'новое', miss: 'нет', done: 'записано' }[stt];
             html += '<div class="item">' +
                 '<span class="tm">' + it.time + '</span>' +
                 '<span class="ph">' + escapeHtml(it.de) + (info ? '<small>' + escapeHtml(info) + '</small>' : '') + '</span>' +
-                '<span class="st ' + st + '">' + label + '</span>' +
-                (st === 'have' ? '<button class="ib site" data-act="site" data-key="' + it.key + '" title="Файл на сайте">▶</button>' : '') +
-                (st === 'fresh' || st === 'done' ? '<button class="ib" data-act="fresh" data-key="' + it.key + '" title="Новая запись">▶</button>' : '') +
+                '<span class="st ' + stt + '">' + label + '</span>' +
+                (stt === 'have' ? '<button class="ib site" data-act="site" data-key="' + it.key + '" title="Файл на сайте">▶</button>' : '') +
+                (stt === 'fresh' || stt === 'done' ? '<button class="ib" data-act="fresh" data-key="' + it.key + '" title="Новая запись">▶</button>' : '') +
                 '<button class="ib" data-act="redo" data-key="' + it.key + '" title="Переозвучить текущими настройками">↻</button>' +
-                (st === 'fresh' ? '<button class="ib red" data-act="drop" data-key="' + it.key + '" title="Отбросить">✕</button>' : '') +
+                (stt === 'fresh' ? '<button class="ib red" data-act="drop" data-key="' + it.key + '" title="Отбросить">✕</button>' : '') +
                 '</div>';
         });
         $('list').innerHTML = html || '<div class="hint" style="padding:10px 0">Пусто</div>';
     }
 
     window.addEventListener('beforeunload', function (e) {
-        if (Object.keys(fresh).length) { e.preventDefault(); e.returnValue = ''; }
+        // незаписанное могло остаться в любой из папок
+        var pending = Object.keys(BY_SLUG).some(function (k) { return Object.keys(BY_SLUG[k].fresh).length; });
+        if (pending) { e.preventDefault(); e.returnValue = ''; }
     });
 
     // ── старт ───────────────────────────────────────────────

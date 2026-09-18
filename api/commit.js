@@ -6,7 +6,7 @@
 //   POST { token, action: 'commit', tree: [{ path, sha }], deletes?: [path], message? }
 //        → { ok, commit, count }
 //
-// Писать можно только в voice/de/uhr/ (mp3 и voice.json).
+// Писать можно только в voice/de/<голос>/ (mp3 и voice.json) — у каждого голоса своя папка.
 // Env: GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, EDITOR_PASSWORD
 import { checkToken, delay } from './_token.js';
 
@@ -18,7 +18,7 @@ function safePath(p) {
   if (typeof p !== 'string') return null;
   const clean = p.replace(/^\/+/, '');
   if (clean.includes('..') || clean.length > 120) return null;
-  if (!/^voice\/de\/uhr\/(\d{2}-\d{2}\.mp3|voice\.json)$/.test(clean)) return null;
+  if (!/^voice\/de\/[a-z0-9-]{1,24}\/(\d{2}-\d{2}\.mp3|voice\.json)$/.test(clean)) return null;
   return clean;
 }
 

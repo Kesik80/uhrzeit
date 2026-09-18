@@ -970,10 +970,10 @@
         window.speechSynthesis.addEventListener('voiceschanged', pickDeVoice);
     }
 
-    // ── Озвучка: записанный голос (voice/de/uhr/HH-MM.mp3) → иначе системный ──
+    // ── Озвучка: записанный голос (voice/de/<голос>/HH-MM.mp3) → иначе системный ──
     // Файлы создаются на странице voicegen.html. Для «gleich / kurz nach» и
     // пока не записанных фраз остаётся системный голос.
-    var VOICE_DIR = 'voice/de/uhr/';
+    var VOICE_DIR = 'voice/de/laura/';   // папка выбранного голоса; у каждого голоса своя
     var voiceMissing = {};          // key → true, если файла нет (не стучимся повторно)
     var voiceAudio = null;
 

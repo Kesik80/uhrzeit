@@ -74,6 +74,29 @@
         background: #f3e9f7; color: var(--v3); border: 1px solid transparent;
     }
     .chips button.on { background: var(--v3); color: #fff; }
+    /* свой список голосов: системный на Android не даёт управлять шрифтом и отступами */
+    #voiceBtn {
+        width: 100%; margin: 0; text-align: left; background: #fff; color: var(--text);
+        border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px;
+        font-size: 14px; font-weight: normal; display: flex; justify-content: space-between; gap: 8px;
+    }
+    #voiceBtn b { font-weight: bold; }
+    #voiceList {
+        margin-top: 4px; border: 1px solid var(--border); border-radius: 8px;
+        max-height: 46vh; overflow-y: auto; background: #fff;
+    }
+    #voiceList[hidden] { display: none; }
+    #voiceList .grp {
+        font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+        padding: 5px 9px; background: #f4f6f9; position: sticky; top: 0;
+    }
+    #voiceList .vc {
+        padding: 6px 9px; font-size: 13px; line-height: 1.25; cursor: pointer;
+        border-top: 1px solid #f0f2f5;
+    }
+    #voiceList .vc small { display: block; font-size: 10.5px; color: var(--muted); }
+    #voiceList .vc.on { background: #eef4fc; color: var(--accent); font-weight: bold; }
+
     .lib { border-top: 1px solid #eef0f4; margin-top: 12px; padding-top: 10px; }
     .lib .row select, .lib .row input { width: auto; flex: 1; min-width: 90px; }
     .libitem { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #eef0f4; }
@@ -189,9 +212,10 @@
     <div class="card">
         <h2>Голос</h2>
         <div class="row">
-            <select id="voice" style="flex:1"></select>
+            <div style="flex:1"><button id="voiceBtn" type="button"><span id="voiceCur">…</span><span>▾</span></button></div>
             <button class="ghost slim" id="btnVoices" title="Обновить список голосов">↻</button>
         </div>
+        <div id="voiceList" hidden></div>
         <div class="hint" id="voiceNote" style="margin-top:5px"></div>
 
         <details class="lib" id="libBox">
@@ -445,7 +469,7 @@
         if (s.voiceId && voiceById(s.voiceId)) {
             voiceId = s.voiceId;
             voiceName = voiceById(s.voiceId).name;
-            $('voice').value = voiceId;
+            renderVoices();
         }
         model = MODELS.indexOf(s.model) >= 0 ? s.model : 'eleven_multilingual_v2';
         var v3 = isV3();
@@ -513,23 +537,29 @@
     function renderVoices() {
         var mine = voices.filter(function (v) { return v.category !== 'premade'; });
         var std  = voices.filter(function (v) { return v.category === 'premade'; });
-        function opts(list) {
+        function rows(list) {
             return list.map(function (v) {
                 var g = (v.labels && (v.labels.gender || v.labels.Gender)) || '';
                 g = g === 'female' ? ' · ж' : g === 'male' ? ' · м' : '';
-                return '<option value="' + v.id + '">' + escapeHtml(shortName(v)) + g + '</option>';
+                var about = voiceAbout(v);
+                return '<div class="vc' + (v.id === voiceId ? ' on' : '') + '" data-v="' + v.id + '">' +
+                    escapeHtml(shortName(v)) + g +
+                    (about ? '<small>' + escapeHtml(about) + '</small>' : '') + '</div>';
             }).join('');
         }
-        $('voice').innerHTML =
-            (mine.length ? '<optgroup label="Из библиотеки">' + opts(mine) + '</optgroup>' : '') +
-            (std.length ? '<optgroup label="Стандартные">' + opts(std) + '</optgroup>' : '');
+        // стандартные сверху: на бесплатном плане только ими и можно озвучивать
+        $('voiceList').innerHTML =
+            (std.length ? '<div class="grp">Стандартные</div>' + rows(std) : '') +
+            (mine.length ? '<div class="grp">Из библиотеки · нужен платный план</div>' + rows(mine) : '');
         var missing = '';
         if (!voiceById(voiceId) && voices.length) {
             missing = voiceName;                  // в этом аккаунте такого голоса нет
             voiceId = voices[0].id;
         }
         var v = voiceById(voiceId);
-        if (v) { voiceName = v.name; $('voice').value = voiceId; }
+        if (v) voiceName = v.name;
+        var gsel = v && v.labels ? (v.labels.gender === 'female' ? ' · ж' : v.labels.gender === 'male' ? ' · м' : '') : '';
+        $('voiceCur').innerHTML = v ? '<b>' + escapeHtml(shortName(v)) + '</b>' + gsel : '…';
         if (missing) log('голоса «' + missing + '» нет в аккаунте ' + (keyIndex + 1) + ' — выбран «' + voiceName + '»', 'err');
         // описание выбранного голоса и предупреждение про библиотеку на free
         var about = v ? voiceAbout(v) : '';
@@ -559,10 +589,21 @@
         idle(btn);
     }
     $('btnVoices').addEventListener('click', loadVoices);
-    $('voice').addEventListener('change', function () {
-        voiceId = $('voice').value;
+    $('voiceBtn').addEventListener('click', function () {
+        $('voiceList').hidden = !$('voiceList').hidden;
+        if (!$('voiceList').hidden) {
+            var on = $('voiceList').querySelector('.vc.on');
+            if (on) on.scrollIntoView({ block: 'center' });
+        }
+    });
+    $('voiceList').addEventListener('click', function (e) {
+        var row = e.target.closest('.vc');
+        if (!row) return;
+        voiceId = row.dataset.v;
         var v = voiceById(voiceId);
         if (v) voiceName = v.name;
+        $('voiceList').hidden = true;
+        renderVoices();
         showSettings();
     });
 
@@ -704,7 +745,7 @@
         });
     });
     ['stab', 'sim', 'style', 'speed'].forEach(function (id) { $(id).addEventListener('input', showSettings); });
-    ['voice', 'ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
+    ['ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
     $('tags').addEventListener('input', function () { paintChips(); remember(); paintQuota(); });
 
     // сохранённые настройки или пресет «Живо»

@@ -89,6 +89,13 @@ export default async function handler(req, res) {
       );
       if (!r.ok) {
         const details = (await r.text()).slice(0, 400);
+        // 402: голос из общей библиотеки, бесплатный план его не озвучивает — другие ключи не помогут
+        if (r.status === 402 || /paid_plan_required/.test(details)) {
+          return res.status(402).json({
+            error: 'Этот голос доступен только на платном плане ElevenLabs',
+            code: 'paid_voice', details, keyIndex: idx,
+          });
+        }
         if (isOutOfCredits(r.status, details) && order.length > 1) {
           lastError = { error: 'У аккаунта ' + (idx + 1) + ' кончились символы', details };
           continue;                       // пробуем следующий аккаунт

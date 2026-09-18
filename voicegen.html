@@ -195,7 +195,8 @@
         <div class="hint" id="voiceNote" style="margin-top:5px"></div>
 
         <details class="lib" id="libBox">
-            <summary style="cursor:pointer;font-size:13px;color:var(--accent)">🔎 Библиотека голосов — добавить новый</summary>
+            <summary style="cursor:pointer;font-size:13px;color:var(--accent)">🔎 Библиотека голосов — только для платного плана</summary>
+            <div class="hint" style="margin-top:8px;color:var(--orange)">На бесплатном плане голос из библиотеки можно послушать и добавить к себе, но озвучить через API нельзя — ElevenLabs отвечает 402. Для записи фраз годятся только стандартные голоса.</div>
             <div class="row" style="margin-top:8px">
                 <input type="text" id="libSearch" placeholder="можно не заполнять">
                 <select id="libLang">
@@ -501,6 +502,14 @@
 
     // ── UI: голоса, пробы, теги ─────────────────────────────
     // ── список голосов аккаунта ──
+    // «Roger - Laid-Back, Casual, Resonant» → «Roger» + описание отдельной строкой
+    function shortName(v) { return String(v.name).split(' - ')[0].trim(); }
+    function voiceAbout(v) {
+        var tail = String(v.name).split(' - ').slice(1).join(' - ').trim();
+        var l = v.labels || {};
+        return [tail, l.accent, l.use_case, l.description].filter(Boolean).join(' · ');
+    }
+
     function renderVoices() {
         var mine = voices.filter(function (v) { return v.category !== 'premade'; });
         var std  = voices.filter(function (v) { return v.category === 'premade'; });
@@ -508,7 +517,7 @@
             return list.map(function (v) {
                 var g = (v.labels && (v.labels.gender || v.labels.Gender)) || '';
                 g = g === 'female' ? ' · ж' : g === 'male' ? ' · м' : '';
-                return '<option value="' + v.id + '">' + escapeHtml(v.name) + g + '</option>';
+                return '<option value="' + v.id + '">' + escapeHtml(shortName(v)) + g + '</option>';
             }).join('');
         }
         $('voice').innerHTML =
@@ -522,9 +531,13 @@
         var v = voiceById(voiceId);
         if (v) { voiceName = v.name; $('voice').value = voiceId; }
         if (missing) log('голоса «' + missing + '» нет в аккаунте ' + (keyIndex + 1) + ' — выбран «' + voiceName + '»', 'err');
-        $('voiceNote').textContent = voices.length
-            ? 'Голоса аккаунта ' + (keyIndex + 1) + ': ' + voices.length + ' (своих ' + mine.length + ')'
-            : '';
+        // описание выбранного голоса и предупреждение про библиотеку на free
+        var about = v ? voiceAbout(v) : '';
+        var fromLib = !!v && v.category !== 'premade';
+        $('voiceNote').innerHTML = !voices.length ? '' :
+            (about ? escapeHtml(about) + '<br>' : '') +
+            'Аккаунт ' + (keyIndex + 1) + ' · голосов ' + voices.length + ', из библиотеки ' + mine.length +
+            (fromLib ? '<br><b style="color:var(--orange)">Голос из библиотеки: на бесплатном плане API его не озвучит (ошибка 402)</b>' : '');
     }
 
     async function loadVoices() {
@@ -892,6 +905,9 @@
         var d = await r.json().catch(function () { return {}; });
         if (!r.ok) {
             if (authError(d)) { var e = new Error('auth'); e.auth = true; throw e; }
+            if (d.code === 'paid_voice') {
+                throw new Error('голос «' + voiceName + '» из библиотеки — бесплатный план не даёт озвучивать его через API. Выбери стандартный голос.');
+            }
             throw new Error((d.error || ('HTTP ' + r.status)) + (d.details ? ' — ' + d.details : ''));
         }
         // сервер мог перейти на другой аккаунт — запоминаем, чтобы не стучаться в пустой

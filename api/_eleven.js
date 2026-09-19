@@ -20,11 +20,12 @@ export function getKeys() {
   return out;
 }
 
-// Кончились символы: ElevenLabs отвечает 401 с quota_exceeded, иногда 429
+// Кончились символы: ElevenLabs отвечает 401 с quota_exceeded.
+// 429 сюда НЕ входит: это «слишком часто», аккаунт менять не нужно — достаточно подождать.
 export function isOutOfCredits(status, body) {
   const t = String(body || '').toLowerCase();
-  if (status === 429) return true;
-  return status === 401 && (t.includes('quota_exceeded') || t.includes('quota exceeded') || t.includes('credits'));
+  return (status === 401 || status === 402) &&
+    (t.includes('quota_exceeded') || t.includes('quota exceeded') || t.includes('credits'));
 }
 
 export async function subscription(key) {

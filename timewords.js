@@ -118,9 +118,9 @@ function timeInWords(h24, m) {
 //   ЧЧ-ММ.mp3    разговорная фраза, ровные 5 минут   «Es ist fünf nach zehn»
 //   g-ЧЧ-ММ.mp3  то же с «Es ist gleich …»           неровные минуты, округление вверх
 //   k-ЧЧ-ММ.mp3  то же с «Es ist kurz nach …»        неровные минуты, округление вниз
-//   h-ЧЧ.mp3     «dreizehn Uhr» — час для offiziell  (24 файла)
-//   m-ММ.mp3     «zwölf» — минута для offiziell      (59 файлов)
-// Offiziell склеивается из двух файлов: часы играют h-ЧЧ, затем m-ММ.
+//   o-ЧЧ-ММ.mp3  offiziell целиком                   «dreizehn Uhr zwölf» (24 × 60)
+// Склейку из кусков («dreizehn Uhr» + «zwölf») пробовали — интонация рвалась,
+// поэтому offiziell пишется целой фразой.
 function pad2t(n) { return String(n).padStart(2, '0'); }
 
 // Ровные 5 минут: ключ файла для часа 0–11 и минуты, кратной 5
@@ -140,9 +140,9 @@ function phraseKey(h24, m) {
     return approx ? (early ? 'g-' : 'k-') + key : key;
 }
 
-// Offiziell: один или два файла подряд
-function officialKeys(h, m) {
-    return m ? ['h-' + pad2t(h), 'm-' + pad2t(m)] : ['h-' + pad2t(h)];
+// Offiziell: один файл на каждую минуту суток
+function officialKey(h, m) {
+    return 'o-' + pad2t(h) + '-' + pad2t(m);
 }
 
 // Текст, который нужно озвучить для этого файла
@@ -151,10 +151,8 @@ function textForKey(key) {
     if (mm) {
         return 'Es ist ' + (mm[1] === 'g' ? 'gleich ' : 'kurz nach ') + deCore(+mm[2], +mm[3] / 5, true);
     }
-    mm = /^h-(\d{2})$/.exec(key);
-    if (mm) return officialDe(+mm[1], 0);
-    mm = /^m-(\d{2})$/.exec(key);
-    if (mm) return numDe(+mm[1]);
+    mm = /^o-(\d{2})-(\d{2})$/.exec(key);
+    if (mm) return officialDe(+mm[1], +mm[2]);
     mm = /^(\d{2})-(\d{2})$/.exec(key);
     if (mm) return timeInWords(+mm[1], +mm[2]).de;
     return '';

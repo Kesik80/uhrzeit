@@ -392,7 +392,7 @@
     var SETS = {
         exact:  { title: 'Ровные 5 мин', items: [] },   // ЧЧ-ММ      — «Es ist fünf nach zehn»
         approx: { title: 'Неровные',     items: [] },   // g-/k-ЧЧ-ММ — «gleich …» и «kurz nach …»
-        offiz:  { title: 'Offiziell',    items: [] }    // h-ЧЧ, m-ММ — склеиваются при проигрывании
+        offiz:  { title: 'Offiziell',    items: [] }    // o-ЧЧ-ММ — «dreizehn Uhr zwölf», целой фразой
     };
     function hhmm(h, m) { return String(h || 12).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
 
@@ -405,12 +405,12 @@
         }
     }
     for (var h = 0; h < 24; h++) {
-        SETS.offiz.items.push({ key: 'h-' + String(h).padStart(2, '0'),
-                                time: String(h).padStart(2, '0') + ' ч', de: textForKey('h-' + String(h).padStart(2, '0')) });
-    }
-    for (var m = 1; m < 60; m++) {
-        SETS.offiz.items.push({ key: 'm-' + String(m).padStart(2, '0'),
-                                time: ':' + String(m).padStart(2, '0'), de: textForKey('m-' + String(m).padStart(2, '0')) });
+        for (var m = 0; m < 60; m++) {
+            var ok = officialKey(h, m);
+            SETS.offiz.items.push({ key: ok,
+                                    time: String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'),
+                                    de: textForKey(ok) });
+        }
     }
 
     var curSet = 'exact';
@@ -550,12 +550,11 @@
     }
 
     // текст, который уходит в модель
-    // Куски offiziell («dreizehn Uhr», «zwölf») читаем нейтрально:
-    // без точки, без настроения и без невидимого вопроса — иначе склейка звучит рвано
-    function isPart(key) { return /^[hm]-/.test(key); }
+    // Offiziell читается ровно, как табло: без настроения и без невидимого вопроса
+    function isPart(key) { return /^o-/.test(key); }
 
     function phrase(key, s) {
-        if (isPart(key)) return byKey[key].de;
+        if (isPart(key)) return byKey[key].de + (s.dot ? '.' : '');
         var t = byKey[key].de + (s.dot ? '.' : '');
         if (s.tags) t = s.tags + ' ' + t;
         return t;
@@ -1099,7 +1098,7 @@
                 $('btnCheck').textContent = 'проверяю… ' + n + ' / ' + ITEMSET().length;
             }
         }
-        await Promise.all([worker(), worker(), worker(), worker()]);
+        await Promise.all([worker(), worker(), worker(), worker(), worker(), worker(), worker(), worker()]);
         st().checked = true;
         st().checkedSets = st().checkedSets || {};
         st().checkedSets[curSet] = true;
@@ -1140,9 +1139,13 @@
         if (!todo.length) { log('нечего озвучивать — всё уже есть', 'ok'); return; }
         if (!(st().checkedSets || {})[curSet] && !redo &&
             !confirm('Проверка «что уже есть» ещё не запускалась — озвучить все ' + todo.length + ' фраз?')) return;
+        if (todo.length > 300 &&
+            !confirm('Это ' + todo.length + ' фраз, примерно ' + Math.ceil(todo.length * 1.7 / 60) +
+                     ' мин. Страницу закрывать нельзя. Продолжаем?')) return;
 
         var s = readSettings();
         var ok = 0, bad = 0, n = 0;
+        var t0 = Date.now();
         stopFlag = false;
         $('btnGen').dataset.running = '1';
         render();
@@ -1153,9 +1156,13 @@
                 if (await genOne(todo[i].key, s)) ok++; else bad++;
                 n++;
                 $('fill').style.width = (n / todo.length * 100) + '%';
-                $('btnGen').textContent = '■ Остановить · ' + n + ' / ' + todo.length;
+                // остаток времени: по среднему на фразу
+                var per = (Date.now() - t0) / n;
+                var left = Math.round(per * (todo.length - n) / 1000);
+                $('btnGen').textContent = '■ Остановить · ' + n + ' / ' + todo.length +
+                    (left > 60 ? ' · ~' + Math.ceil(left / 60) + ' мин' : left > 3 ? ' · ~' + left + ' с' : '');
                 if (n % 6 === 0) render();
-                await sleep(250);
+                await sleep(150);
             }
         } catch (e) { /* сессия истекла — окно входа уже открыто */ }
         delete $('btnGen').dataset.running;

@@ -1023,7 +1023,7 @@
         if (isGameMode) return;
         var text = document.getElementById('clock-exact').textContent.replace('offiziell: ', '');
         if (!text.trim()) return;
-        playKeys(officialKeys(isGameMode ? (hour % 12 || 12) : hour, minute), text);
+        playKeys([officialKey(hour, minute)], text);
     }
 
     function speakSystem(text) {

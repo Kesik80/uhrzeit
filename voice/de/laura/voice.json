@@ -1,0 +1,149 @@
+{
+ "files": {
+  "g-00-00": {
+   "text": "[confident] [excited] Es ist gleich zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "k-00-00": {
+   "text": "[confident] [excited] Es ist kurz nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "g-00-05": {
+   "text": "[confident] [excited] Es ist gleich fünf nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "k-00-05": {
+   "text": "[confident] [excited] Es ist kurz nach fünf nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "g-00-10": {
+   "text": "[confident] [excited] Es ist gleich zehn nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "k-00-10": {
+   "text": "[confident] [excited] Es ist kurz nach zehn nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "g-00-15": {
+   "text": "[confident] [excited] Es ist gleich Viertel nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "k-00-15": {
+   "text": "[confident] [excited] Es ist kurz nach Viertel nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "g-00-20": {
+   "text": "[confident] [excited] Es ist gleich zwanzig nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "k-00-20": {
+   "text": "[confident] [excited] Es ist kurz nach zwanzig nach zwölf",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "g-00-25": {
+   "text": "[confident] [excited] Es ist gleich fünf vor halb eins",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  },
+  "k-00-25": {
+   "text": "[confident] [excited] Es ist kurz nach fünf vor halb eins",
+   "voice": "Laura - Enthusiast, Quirky Attitude",
+   "model": "eleven_v3",
+   "stability": 1,
+   "similarity": 0.8,
+   "style": 0.4,
+   "speed": 1,
+   "ctx": false,
+   "seed": 547127255,
+   "date": "2026-09-19"
+  }
+ },
+ "updated": "2026-09-19T21:54:48.916Z"
+}

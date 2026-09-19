@@ -309,7 +309,8 @@
 
     <!-- запись -->
     <div class="card">
-        <h2>Запись всех фраз (144)</h2>
+        <h2>Запись всех фраз</h2>
+        <div class="filters" id="sets" style="margin:0 0 8px"></div>
         <div class="hint" id="dirNote" style="margin-bottom:8px"></div>
         <button class="ghost" id="btnCheck">1 · Проверить, что уже есть</button>
         <div class="chk">
@@ -387,17 +388,38 @@
         warm: { stab: 0.35, sim: 0.75, style: 0.35, speed: 0.95, ctx: true }
     };
 
-    // все 144 фразы: 00:00 … 11:55 (00 = zwölf)
-    var ITEMS = [];
+    // Три набора файлов в одной папке голоса
+    var SETS = {
+        exact:  { title: 'Ровные 5 мин', items: [] },   // ЧЧ-ММ      — «Es ist fünf nach zehn»
+        approx: { title: 'Неровные',     items: [] },   // g-/k-ЧЧ-ММ — «gleich …» и «kurz nach …»
+        offiz:  { title: 'Offiziell',    items: [] }    // h-ЧЧ, m-ММ — склеиваются при проигрывании
+    };
+    function hhmm(h, m) { return String(h || 12).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+
     for (var h = 0; h < 12; h++) {
         for (var m = 0; m < 60; m += 5) {
-            ITEMS.push({ key: voiceKey(h, m), h: h, m: m,
-                         time: String(h || 12).padStart(2, '0') + ':' + String(m).padStart(2, '0'),
-                         de: timeInWords(h, m).de });
+            var k = voiceKey(h, m);
+            SETS.exact.items.push({ key: k, time: hhmm(h, m), de: textForKey(k) });
+            SETS.approx.items.push({ key: 'g-' + k, time: hhmm(h, m), de: textForKey('g-' + k) });
+            SETS.approx.items.push({ key: 'k-' + k, time: hhmm(h, m), de: textForKey('k-' + k) });
         }
     }
+    for (var h = 0; h < 24; h++) {
+        SETS.offiz.items.push({ key: 'h-' + String(h).padStart(2, '0'),
+                                time: String(h).padStart(2, '0') + ' ч', de: textForKey('h-' + String(h).padStart(2, '0')) });
+    }
+    for (var m = 1; m < 60; m++) {
+        SETS.offiz.items.push({ key: 'm-' + String(m).padStart(2, '0'),
+                                time: ':' + String(m).padStart(2, '0'), de: textForKey('m-' + String(m).padStart(2, '0')) });
+    }
+
+    var curSet = 'exact';
+    function ITEMSET() { return SETS[curSet].items; }
+
     var byKey = {};
-    ITEMS.forEach(function (it) { byKey[it.key] = it; });
+    Object.keys(SETS).forEach(function (id) {
+        SETS[id].items.forEach(function (it) { it.set = id; byKey[it.key] = it; });
+    });
 
     var token = '';
     // Состояние на каждую папку: что есть на сайте, что озвучено, что записано
@@ -528,10 +550,24 @@
     }
 
     // текст, который уходит в модель
+    // Куски offiziell («dreizehn Uhr», «zwölf») читаем нейтрально:
+    // без точки, без настроения и без невидимого вопроса — иначе склейка звучит рвано
+    function isPart(key) { return /^[hm]-/.test(key); }
+
     function phrase(key, s) {
+        if (isPart(key)) return byKey[key].de;
         var t = byKey[key].de + (s.dot ? '.' : '');
         if (s.tags) t = s.tags + ' ' + t;
         return t;
+    }
+
+    // Настройки для конкретного файла
+    function settingsFor(key, s) {
+        if (!isPart(key)) return s;
+        var c = {};
+        for (var k in s) c[k] = s[k];
+        c.tags = ''; c.dot = false; c.ctx = false;
+        return c;
     }
 
     // ── UI: голоса, пробы, теги ─────────────────────────────
@@ -723,9 +759,12 @@
             log('не добавился «' + v.name + '»: ' + err.message + ' (нужно право Voices → Write у ключа)', 'err');
         }
     });
-    $('sampleKey').innerHTML = ITEMS.map(function (it) {
-        return '<option value="' + it.key + '">' + it.time + ' — ' + it.de + '</option>';
-    }).join('');
+    function fillSamples() {
+        $('sampleKey').innerHTML = ITEMSET().map(function (it) {
+            return '<option value="' + it.key + '">' + it.time + ' — ' + it.de + '</option>';
+        }).join('');
+    }
+    fillSamples();
     $('chips').innerHTML = TAGS.map(function (t) {
         return '<button type="button" data-code="' + t.code + '">' + t.label + '</button>';
     }).join('');
@@ -845,7 +884,7 @@
     function needChars() {
         var s = readSettings();
         var redo = $('redo').checked;
-        return ITEMS.reduce(function (n, it) {
+        return ITEMSET().reduce(function (n, it) {
             if (!redo && (st().onSite[it.key] || st().fresh[it.key] || st().committed[it.key])) return n;
             return n + phrase(it.key, s).length;
         }, 0);
@@ -946,6 +985,7 @@
 
     // ── генерация ───────────────────────────────────────────
     async function speak(key, s) {
+        s = settingsFor(key, s);
         var r = await fetch('/api/speak', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1049,23 +1089,25 @@
     }
     $('btnCheck').addEventListener('click', async function () {
         busy($('btnCheck'), 'проверяю…');
-        var queue = ITEMS.slice(), n = 0, have = 0;
+        var queue = ITEMSET().slice(), n = 0, have = 0;
         async function worker() {
             while (queue.length) {
                 var it = queue.shift();
                 if (await exists(it.key)) { st().onSite[it.key] = true; have++; } else { delete st().onSite[it.key]; }
                 n++;
-                $('fill').style.width = (n / ITEMS.length * 100) + '%';
-                $('btnCheck').textContent = 'проверяю… ' + n + ' / ' + ITEMS.length;
+                $('fill').style.width = (n / ITEMSET().length * 100) + '%';
+                $('btnCheck').textContent = 'проверяю… ' + n + ' / ' + ITEMSET().length;
             }
         }
         await Promise.all([worker(), worker(), worker(), worker()]);
         st().checked = true;
+        st().checkedSets = st().checkedSets || {};
+        st().checkedSets[curSet] = true;
         await loadMeta();
         render();
         paintQuota();
-        log('на сайте есть ' + have + ' из ' + ITEMS.length + ', не хватает ' + (ITEMS.length - have),
-            have === ITEMS.length ? 'ok' : 'new');
+        log('на сайте есть ' + have + ' из ' + ITEMSET().length + ', не хватает ' + (ITEMSET().length - have),
+            have === ITEMSET().length ? 'ok' : 'new');
         idle($('btnCheck'));
     });
 
@@ -1092,11 +1134,11 @@
     $('btnGen').addEventListener('click', async function () {
         if ($('btnGen').dataset.running) { stopFlag = true; return; }
         var redo = $('redo').checked;
-        var todo = ITEMS.filter(function (it) {
+        var todo = ITEMSET().filter(function (it) {
             return redo || (!st().onSite[it.key] && !st().fresh[it.key] && !st().committed[it.key]);
         });
         if (!todo.length) { log('нечего озвучивать — всё уже есть', 'ok'); return; }
-        if (!st().checked && !redo &&
+        if (!(st().checkedSets || {})[curSet] && !redo &&
             !confirm('Проверка «что уже есть» ещё не запускалась — озвучить все ' + todo.length + ' фраз?')) return;
 
         var s = readSettings();
@@ -1224,6 +1266,24 @@
     });
 
     // ── список ──────────────────────────────────────────────
+    // ── переключение наборов ──
+    function renderSets() {
+        $('sets').innerHTML = Object.keys(SETS).map(function (id) {
+            var items = SETS[id].items;
+            var done = items.filter(function (it) { return state(it.key) !== 'miss'; }).length;
+            return '<button data-s="' + id + '"' + (id === curSet ? ' class="on"' : '') + '>' +
+                SETS[id].title + '<br>' + done + '/' + items.length + '</button>';
+        }).join('');
+    }
+    $('sets').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        curSet = b.dataset.s;
+        fillSamples();
+        render();
+        paintQuota();
+    });
+
     $('filters').addEventListener('click', function (e) {
         if (!e.target.dataset.f) return;
         filter = e.target.dataset.f;
@@ -1239,9 +1299,16 @@
     }
 
     function render() {
-        var have = ITEMS.filter(function (it) { return state(it.key) !== 'miss'; }).length;
-        $('dirNote').innerHTML = 'Папка <b>' + DIR() + '</b> · готово ' + have + ' из ' + ITEMS.length +
-            '<br>У каждого голоса своя папка — часы потом смогут переключаться между ними.';
+        renderSets();
+        var have = ITEMSET().filter(function (it) { return state(it.key) !== 'miss'; }).length;
+        var total = 0, allDone = 0;
+        Object.keys(SETS).forEach(function (id) {
+            total += SETS[id].items.length;
+            allDone += SETS[id].items.filter(function (it) { return state(it.key) !== 'miss'; }).length;
+        });
+        $('dirNote').innerHTML = 'Папка <b>' + DIR() + '</b> · в наборе ' + have + ' из ' + ITEMSET().length +
+            ', всего по голосу ' + allDone + ' из ' + total +
+            '<br>Кнопки ниже работают только с выбранным набором.';
 
         var nFresh = Object.keys(st().fresh).length;
         // пока идёт озвучка, коммит недоступен — иначе запишется половина
@@ -1250,7 +1317,7 @@
         $('btnPub').dataset.label = $('btnPub').textContent;
 
         var html = '';
-        ITEMS.forEach(function (it) {
+        ITEMSET().forEach(function (it) {
             var stt = state(it.key);
             if (filter !== 'all' && !(filter === stt || (filter === 'have' && stt === 'done'))) return;
             var info = st().fresh[it.key] ? describe(st().fresh[it.key].s)

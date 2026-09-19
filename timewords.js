@@ -76,6 +76,14 @@ function hourFormRu(h12) {
 
 function capFirst(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
 
+// Немецкая фраза без «Es ist»: один и тот же текст в часах и в именах файлов озвучки
+function deCore(base, step, approx) {
+    var next = (base + 1) % 12;
+    if (step === 0) return approx ? hourDe(base, false) : hourDe(base, true) + ' Uhr';
+    if (step <= 4)  return phrasesDe[step] + ' ' + hourDe(base, false);   // 5–20: nach + текущий час
+    return phrasesDe[step] + ' ' + hourDe(next, false);                    // 25–55: следующий час
+}
+
 // Возвращает { de, ru } — разговорный вариант с округлением до 5 минут
 function timeInWords(h24, m) {
     var step   = Math.round(m / 5);           // 0..12
@@ -85,19 +93,13 @@ function timeInWords(h24, m) {
     if (step === 12) { step = 0; base = (base + 1) % 12; }  // 58–59 → следующий час
     var next = (base + 1) % 12;
 
-    var de, ru;
+    var de = deCore(base, step, approx), ru;
     if (step === 0) {
-        de = approx ? hourDe(base, false) : hourDe(base, true) + ' Uhr';
         var hf = hourFormRu(base);
         ru = (approx ? '' : 'ровно ') + hoursRuNom[base] + (hf ? ' ' + hf : '');
-    } else if (step <= 4) {                   // 5–20: nach + ТЕКУЩИЙ час
-        de = phrasesDe[step] + ' ' + hourDe(base, false);
+    } else if (step <= 7) {                   // 5–35: nach / halb
         ru = phrasesRu[step] + ' ' + hoursRuGen[next];
-    } else if (step <= 7) {                   // 25–35: …halb + СЛЕДУЮЩИЙ час
-        de = phrasesDe[step] + ' ' + hourDe(next, false);
-        ru = phrasesRu[step] + ' ' + hoursRuGen[next];
-    } else {                                  // 40–55: vor / без + СЛЕДУЮЩИЙ час
-        de = phrasesDe[step] + ' ' + hourDe(next, false);
+    } else {                                  // 40–55: без …
         ru = phrasesRu[step] + ' ' + hoursRuNom[next];
     }
 
@@ -111,8 +113,49 @@ function timeInWords(h24, m) {
     return { de: de, ru: ru };
 }
 
-// Имя файла озвучки: час по кругу 0–11 (0 = zwölf) и минуты кратные 5
+// ─── ИМЕНА ФАЙЛОВ ОЗВУЧКИ ────────────────────────────────────────────────────
+// Наборы в папке голоса (voice/de/<голос>/):
+//   ЧЧ-ММ.mp3    разговорная фраза, ровные 5 минут   «Es ist fünf nach zehn»
+//   g-ЧЧ-ММ.mp3  то же с «Es ist gleich …»           неровные минуты, округление вверх
+//   k-ЧЧ-ММ.mp3  то же с «Es ist kurz nach …»        неровные минуты, округление вниз
+//   h-ЧЧ.mp3     «dreizehn Uhr» — час для offiziell  (24 файла)
+//   m-ММ.mp3     «zwölf» — минута для offiziell      (59 файлов)
+// Offiziell склеивается из двух файлов: часы играют h-ЧЧ, затем m-ММ.
+function pad2t(n) { return String(n).padStart(2, '0'); }
+
+// Ровные 5 минут: ключ файла для часа 0–11 и минуты, кратной 5
 function voiceKey(h24, m) {
     if (m % 5 !== 0) return null;
-    return String(h24 % 12).padStart(2, '0') + '-' + String(m).padStart(2, '0');
+    return pad2t(h24 % 12) + '-' + pad2t(m);
+}
+
+// Ключ разговорной фразы для ЛЮБОЙ минуты (с префиксом g- / k-, если минута неровная)
+function phraseKey(h24, m) {
+    var step = Math.round(m / 5);
+    var approx = (m % 5 !== 0);
+    var early = approx && (step * 5 > m);
+    var base = h24 % 12;
+    if (step === 12) { step = 0; base = (base + 1) % 12; }
+    var key = pad2t(base) + '-' + pad2t(step * 5);
+    return approx ? (early ? 'g-' : 'k-') + key : key;
+}
+
+// Offiziell: один или два файла подряд
+function officialKeys(h, m) {
+    return m ? ['h-' + pad2t(h), 'm-' + pad2t(m)] : ['h-' + pad2t(h)];
+}
+
+// Текст, который нужно озвучить для этого файла
+function textForKey(key) {
+    var mm = /^([gk])-(\d{2})-(\d{2})$/.exec(key);
+    if (mm) {
+        return 'Es ist ' + (mm[1] === 'g' ? 'gleich ' : 'kurz nach ') + deCore(+mm[2], +mm[3] / 5, true);
+    }
+    mm = /^h-(\d{2})$/.exec(key);
+    if (mm) return officialDe(+mm[1], 0);
+    mm = /^m-(\d{2})$/.exec(key);
+    if (mm) return numDe(+mm[1]);
+    mm = /^(\d{2})-(\d{2})$/.exec(key);
+    if (mm) return timeInWords(+mm[1], +mm[2]).de;
+    return '';
 }

@@ -85,6 +85,7 @@
         }
 
         #clock-exact {
+            cursor: pointer;
             font-size: clamp(12px, 3.6vw, 16px);
             color: var(--hint);
             text-align: center;
@@ -193,7 +194,7 @@
             background:none;border:none;cursor:pointer;font-size:clamp(18px,5vw,24px);
             padding:2px 4px;opacity:0.7;line-height:1;display:none">🔊</button>
     </div>
-    <div id="clock-exact"> </div>
+    <div id="clock-exact" onclick="speakOfficial()" title="Прослушать"> </div>
     <div id="clock-ru"> </div>
     <div class="canvas-wrap">
         <canvas id="myCanvas"></canvas>
@@ -982,30 +983,47 @@
         if (speechSupported) window.speechSynthesis.cancel();
     }
 
+    // Проигрываем цепочку файлов подряд; если какого-то нет — системный голос
+    function playKeys(keys, fallbackText) {
+        stopSpeech();
+        var i = 0;
+        var token = {};
+        voiceAudio = token;                       // метка текущего воспроизведения
+        function next() {
+            if (voiceAudio !== token) return;     // уже запустили что-то другое
+            if (i >= keys.length) { voiceAudio = null; return; }
+            var key = keys[i++];
+            if (voiceMissing[key]) return fail();
+            var a = new Audio(VOICE_DIR + key + '.mp3');
+            a.addEventListener('ended', next);
+            a.addEventListener('error', function () { voiceMissing[key] = true; fail(); });
+            var pr = a.play();
+            if (pr && pr.catch) pr.catch(function (e) {
+                if (e && e.name === 'NotAllowedError') { voiceAudio = null; return; }
+                voiceMissing[key] = true;
+                fail();
+            });
+        }
+        function fail() {
+            if (voiceAudio !== token) return;
+            voiceAudio = null;
+            speakSystem(fallbackText);
+        }
+        next();
+    }
+
     function speakTime() {
         var text = document.getElementById('clock').textContent;
         if (!text || text.trim() === '') return;
-        stopSpeech();
-        var key = voiceKey(hour, minute);
-        if (key && !voiceMissing[key]) {
-            var a = new Audio(VOICE_DIR + key + '.mp3');
-            voiceAudio = a;
-            var fallback = function () {
-                if (voiceAudio !== a) return;          // уже запущена другая фраза
-                voiceMissing[key] = true;
-                voiceAudio = null;
-                speakSystem(text);
-            };
-            a.addEventListener('error', fallback);
-            var pr = a.play();
-            if (pr && pr.catch) pr.catch(function (e) {
-                // NotAllowedError — браузер запретил автозапуск без касания; системный голос тоже не сможет
-                if (e && e.name === 'NotAllowedError') return;
-                fallback();
-            });
-            return;
-        }
-        speakSystem(text);
+        playKeys([phraseKey(hour, minute)], text);
+    }
+
+    // Нажатие на строку «offiziell: …» — читается по двум файлам: час и минута
+    function speakOfficial() {
+        if (isGameMode) return;
+        var text = document.getElementById('clock-exact').textContent.replace('offiziell: ', '');
+        if (!text.trim()) return;
+        playKeys(officialKeys(isGameMode ? (hour % 12 || 12) : hour, minute), text);
     }
 
     function speakSystem(text) {
@@ -1019,7 +1037,6 @@
         window.speechSynthesis.speak(utt);
     }
 
-    // Показываем кнопку только если Speech API доступен
 
     // ── Тема ──────────────────────────────────────────────────────────────────
     var isDark = false;

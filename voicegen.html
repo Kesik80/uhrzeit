@@ -296,6 +296,14 @@
             <input type="checkbox" id="dot">
             <span>Точка в конце фразы</span>
         </div>
+        <div class="chk">
+            <input type="checkbox" id="useSeed">
+            <span>Одно зерно на весь набор <span class="hint">иначе v3 читает каждый дубль по-своему</span></span>
+        </div>
+        <div class="row" id="seedRow" style="margin-top:6px">
+            <input type="text" id="seed" inputmode="numeric" style="flex:1" placeholder="12345">
+            <button class="ghost slim" id="btnSeed" title="Новое зерно">🎲</button>
+        </div>
     </div>
 
     <!-- пробы -->
@@ -442,6 +450,7 @@
         try {
             localStorage.setItem('uhrzeit_voicegen', JSON.stringify({
                 voiceId: voiceId, voice: voiceName, model: model,
+                useSeed: $('useSeed').checked, seed: $('seed').value,
                 v3stab: v3stab, tags: $('tags').value,
                 stab: $('stab').value, sim: $('sim').value, style: $('style').value, speed: $('speed').value,
                 ctx: $('ctx').checked, dot: $('dot').checked, sample: $('sampleKey').value
@@ -491,6 +500,7 @@
             similarity_boost: +$('sim').value,
             style: +$('style').value,
             speed: +$('speed').value,
+            seed: $('useSeed').checked ? (parseInt($('seed').value, 10) || 0) : null,
             tags: v3 ? $('tags').value.trim() : '',
             ctx: !v3 && $('ctx').checked,
             dot: $('dot').checked
@@ -514,6 +524,8 @@
         $('style').value = s.style;
         $('speed').value = s.speed;
         $('dot').checked = !!s.dot;
+        $('useSeed').checked = s.seed !== null && s.seed !== undefined;
+        if (s.seed !== null && s.seed !== undefined) $('seed').value = s.seed;
         showSettings();
     }
 
@@ -528,6 +540,7 @@
             if (s.ctx) parts.push('с вопросом');
         }
         parts.push('арт. ' + (+s.style).toFixed(2));
+        if (s.seed !== null && s.seed !== undefined) parts.push('зерно ' + s.seed);
         parts.push((+s.speed).toFixed(2) + '×');
         return parts.join(' · ');
     }
@@ -541,6 +554,7 @@
         $('vSim').textContent = (+$('sim').value).toFixed(2);
         $('vStyle').textContent = (+$('style').value).toFixed(2);
         $('vSpeed').textContent = (+$('speed').value).toFixed(2) + '×';
+        $('seedRow').style.display = $('useSeed').checked ? 'flex' : 'none';
         Array.prototype.forEach.call($('v3stab').children, function (b) {
             b.classList.toggle('on', +b.dataset.v === v3stab);
         });
@@ -801,7 +815,12 @@
         });
     });
     ['stab', 'sim', 'style', 'speed'].forEach(function (id) { $(id).addEventListener('input', showSettings); });
-    ['ctx', 'dot', 'sampleKey'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
+    ['ctx', 'dot', 'sampleKey', 'useSeed'].forEach(function (id) { $(id).addEventListener('change', showSettings); });
+    $('seed').addEventListener('input', remember);
+    $('btnSeed').addEventListener('click', function () {
+        $('seed').value = Math.floor(Math.random() * 1e9);
+        showSettings();
+    });
     $('tags').addEventListener('input', function () { paintChips(); remember(); paintQuota(); });
 
     // сохранённые настройки или пресет «Живо»
@@ -812,6 +831,7 @@
             var p = PRESETS.live;
             $('stab').value = p.stab; $('sim').value = p.sim; $('style').value = p.style;
             $('speed').value = p.speed; $('ctx').checked = p.ctx; $('dot').checked = true;
+            $('useSeed').checked = true; $('seed').value = Math.floor(Math.random() * 1e9);
 
             // по умолчанию — текущее время
             var d = new Date();
@@ -826,6 +846,8 @@
         $('tags').value = sv.tags || '';
         $('stab').value = sv.stab; $('sim').value = sv.sim; $('style').value = sv.style; $('speed').value = sv.speed;
         $('ctx').checked = !!sv.ctx; $('dot').checked = sv.dot !== false;
+        $('useSeed').checked = !!sv.useSeed;
+        $('seed').value = sv.seed || Math.floor(Math.random() * 1e9);
         if (sv.sample && byKey[sv.sample]) $('sampleKey').value = sv.sample;
     })();
     showSettings();
@@ -996,6 +1018,7 @@
                     stability: s.stability, similarity_boost: s.similarity_boost,
                     style: s.style, speed: s.speed, use_speaker_boost: true
                 },
+                seed: s.seed === null ? undefined : s.seed,
                 previousText: s.ctx ? CTX_BEFORE : undefined,
                 keyIndex: keyIndex
             })
@@ -1220,7 +1243,7 @@
                 var s = st().fresh[k].s;
                 m.files[k] = { text: phrase(k, s), voice: s.voice, model: s.model, stability: s.stability,
                                similarity: s.similarity_boost, style: s.style, speed: s.speed,
-                               ctx: s.ctx, date: new Date().toISOString().slice(0, 10) };
+                               ctx: s.ctx, seed: s.seed, date: new Date().toISOString().slice(0, 10) };
             });
             m.updated = new Date().toISOString();
             var files = keys.map(function (k) { return { path: DIR() + k + '.mp3', content: st().fresh[k].audio }; });
@@ -1332,6 +1355,7 @@
                            voice: st().meta.files[it.key].voice, model: st().meta.files[it.key].model,
                            stability: st().meta.files[it.key].stability, style: st().meta.files[it.key].style,
                            speed: st().meta.files[it.key].speed, ctx: st().meta.files[it.key].ctx,
+                           seed: st().meta.files[it.key].seed,
                            tags: (st().meta.files[it.key].text || '').match(/^(\[[^\]]+\]\s*)+/) ? st().meta.files[it.key].text.match(/^(\[[^\]]+\]\s*)+/)[0].trim() : ''
                        })
                      : '';

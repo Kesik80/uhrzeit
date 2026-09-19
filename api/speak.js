@@ -1,7 +1,7 @@
 // api/speak.js — озвучка фразы через ElevenLabs (основа — speak.js из Yeva).
 // Только генерация: звук возвращается в браузер (base64), запись в GitHub — через /api/commit.
 //
-// POST { token, text, voiceId, modelId, voiceSettings, previousText, nextText, keyIndex }
+// POST { token, text, voiceId, modelId, voiceSettings, previousText, nextText, keyIndex, seed }
 //   token         — из /api/auth (пароль редактора)
 //   modelId       — из белого списка, включая eleven_v3
 //   voiceSettings — { stability, similarity_boost, style, speed, use_speaker_boost }
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { token, text, voiceId, modelId, voiceSettings, previousText, nextText, keyIndex } = req.body || {};
+  const { token, text, voiceId, modelId, voiceSettings, previousText, nextText, keyIndex, seed } = req.body || {};
 
   if (!checkToken(token)) {
     await delay(500);
@@ -71,6 +71,9 @@ export default async function handler(req, res) {
   if (speed !== 1) settings.speed = speed;
 
   const body = { text, model_id: model, voice_settings: settings };
+  // Одно зерно на весь набор — модель старается держать одинаковую манеру чтения.
+  // Полной гарантии ElevenLabs не даёт, это «best effort».
+  if (Number.isInteger(seed) && seed >= 0 && seed <= 4294967295) body.seed = seed;
   if (!isV3) {
     if (previousText) body.previous_text = String(previousText).slice(0, 400);
     if (nextText) body.next_text = String(nextText).slice(0, 400);

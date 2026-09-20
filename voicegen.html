@@ -475,6 +475,30 @@
         btn.disabled = false;
     }
     var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+    // ── экран не гаснет, пока идёт долгая работа ──
+    // Android снимает блокировку при сворачивании вкладки, поэтому берём её заново при возврате.
+    var wakeLock = null, wakeWanted = false;
+    async function keepAwake(on) {
+        wakeWanted = on;
+        if (!('wakeLock' in navigator)) return;
+        try {
+            if (on) {
+                if (!wakeLock) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', function () { wakeLock = null; });
+                }
+            } else if (wakeLock) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+        } catch (e) {
+            if (on) log('экран может погаснуть: ' + e.message, 'err');
+        }
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (wakeWanted && document.visibilityState === 'visible' && !wakeLock) keepAwake(true);
+    });
     var nf = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
 
     // ── настройки ───────────────────────────────────────────
@@ -1111,6 +1135,7 @@
     }
     $('btnCheck').addEventListener('click', async function () {
         busy($('btnCheck'), 'проверяю…');
+        keepAwake(true);
         var queue = ITEMSET().slice(), n = 0, have = 0;
         async function worker() {
             while (queue.length) {
@@ -1130,6 +1155,7 @@
         paintQuota();
         log('на сайте есть ' + have + ' из ' + ITEMSET().length + ', не хватает ' + (ITEMSET().length - have),
             have === ITEMSET().length ? 'ok' : 'new');
+        keepAwake(false);
         idle($('btnCheck'));
     });
 
@@ -1170,6 +1196,7 @@
         var ok = 0, bad = 0, n = 0;
         var t0 = Date.now();
         stopFlag = false;
+        keepAwake(true);
         $('btnGen').dataset.running = '1';
         render();
         $('btnGen').textContent = '■ Остановить';
@@ -1185,9 +1212,13 @@
                 $('btnGen').textContent = '■ Остановить · ' + n + ' / ' + todo.length +
                     (left > 60 ? ' · ~' + Math.ceil(left / 60) + ' мин' : left > 3 ? ' · ~' + left + ' с' : '');
                 if (n % 6 === 0) render();
+                // страницу может выгрузить система — сохраняем порциями, чтобы не потерять всё
+                if (Object.keys(st().fresh).length >= AUTO_COMMIT) await publish(true);
                 await sleep(150);
             }
         } catch (e) { /* сессия истекла — окно входа уже открыто */ }
+        if (Object.keys(st().fresh).length) await publish(true);   // остаток
+        keepAwake(false);
         delete $('btnGen').dataset.running;
         $('btnGen').textContent = $('btnGen').dataset.label || '2 · Озвучить недостающие';
         render();
@@ -1202,7 +1233,7 @@
         if (!b) return;
         var key = b.dataset.key;
         if (b.dataset.act === 'site') playSite(key);
-        if (b.dataset.act === 'fresh') playB64((st().fresh[key] || st().committed[key]).audio);
+        if (b.dataset.act === 'fresh' && st().fresh[key]) playB64(st().fresh[key].audio);
         if (b.dataset.act === 'redo') {
             b.disabled = true; b.textContent = '…';
             try {
@@ -1231,10 +1262,17 @@
         return d;
     }
 
-    $('btnPub').addEventListener('click', async function () {
+    // Коммит: вручную кнопкой или автоматически каждые AUTO_COMMIT фраз во время озвучки
+    var AUTO_COMMIT = 100;
+
+    $('btnPub').addEventListener('click', function () { publish(false); });
+
+    async function publish(auto) {
         var keys = Object.keys(st().fresh);
-        if (!keys.length) return;
-        busy($('btnPub'), 'заливаю…');
+        if (!keys.length) return false;
+        var okDone = false;
+        busy($('btnPub'), auto ? 'промежуточный коммит…' : 'заливаю…');
+        keepAwake(true);
         try {
             // метаданные: какими настройками записана каждая фраза
             var m = JSON.parse(JSON.stringify(st().meta || { files: {} }));
@@ -1284,16 +1322,24 @@
                 await sleep(1500);   // ветка могла уйти вперёд — одна повторная попытка
                 c = await postCommit({ action: 'commit', tree: tree, message: 'Озвучка времени: ' + okKeys.length + ' фраз' });
             }
-            okKeys.forEach(function (k) { st().committed[k] = st().fresh[k]; delete st().fresh[k]; });
+            // Звук записанных фраз держать в памяти незачем — вкладку может выгрузить система
+            okKeys.forEach(function (k) {
+                st().committed[k] = { s: st().fresh[k].s };
+                delete st().fresh[k];
+            });
+            okDone = true;
             st().meta = m;
             $('fill').style.width = '100%';
-            log('записано одним коммитом: ' + okKeys.length + ' фраз (' + c.commit.slice(0, 7) + '). Через ~1 мин появятся на сайте.', 'ok');
+            log((auto ? 'промежуточный коммит: ' : 'записано одним коммитом: ') + okKeys.length +
+                ' фраз (' + c.commit.slice(0, 7) + ')' + (auto ? '' : '. Через ~1 мин появятся на сайте.'), 'ok');
         } catch (e) {
             if (!e.auth) log('коммит не вышел: ' + e.message, 'err');
         }
+        if (!auto) keepAwake(false);
         idle($('btnPub'));
         render();
-    });
+        return okDone;
+    }
 
     // ── список ──────────────────────────────────────────────
     // ── переключение наборов ──
@@ -1365,7 +1411,7 @@
                 '<span class="ph">' + escapeHtml(it.de) + (info ? '<small>' + escapeHtml(info) + '</small>' : '') + '</span>' +
                 '<span class="st ' + stt + '">' + label + '</span>' +
                 (stt === 'have' ? '<button class="ib site" data-act="site" data-key="' + it.key + '" title="Файл на сайте">▶</button>' : '') +
-                (stt === 'fresh' || stt === 'done' ? '<button class="ib" data-act="fresh" data-key="' + it.key + '" title="Новая запись">▶</button>' : '') +
+                (st().fresh[it.key] ? '<button class="ib" data-act="fresh" data-key="' + it.key + '" title="Новая запись">▶</button>' : '') +
                 '<button class="ib" data-act="redo" data-key="' + it.key + '" title="Переозвучить текущими настройками">↻</button>' +
                 (stt === 'fresh' ? '<button class="ib red" data-act="drop" data-key="' + it.key + '" title="Отбросить">✕</button>' : '') +
                 '</div>';

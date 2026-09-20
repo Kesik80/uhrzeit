@@ -227,6 +227,12 @@
         </label>
     </div>
 
+    <!-- Подсказки вокруг циферблата -->
+    <label id="hintsWrap" style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none;margin-top:2px">
+        <input type="checkbox" id="chkHints" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71" checked>
+        💬 Подсказки
+    </label>
+
     <!-- Авто-звук в обычном режиме — всегда виден -->
     <label id="normalSpeakWrap" style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none;margin-top:2px">
         <input type="checkbox" id="chkNormalSpeak" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71">
@@ -605,7 +611,8 @@
             ctx.restore();
         }
 
-        if (!isGameMode) {
+        // Подсказки вокруг циферблата: дуги, сектора и надписи — их можно выключить
+        if (!isGameMode && showHints) {
             drawArcsWithTriangles(ctx, clockCenterX, clockCenterY, clockRadius - padding, 0);
             drawSectors(ctx, clockCenterX, clockCenterY, clockRadius - padding);
             drawLinesFromCenter(ctx, clockCenterX, clockCenterY, clockRadius - padding);
@@ -835,6 +842,7 @@
     var gameCountdown = 0;     // секунды до конца фазы
     var isGameMode    = false;
     var isStoppingGame  = false; // подавляет авто-звук при выходе из игры
+    var showHints = true;       // надписи и дуги вокруг циферблата
     var lastSpokenKey = -1;     // последнее озвученное время, часы*60+минуты (обычный режим)
 
     // ─── SVG ТАЙМЕР ──────────────────────────────────────────────────────────
@@ -863,6 +871,7 @@
         document.getElementById('gamePhaseWrap').style.display = active ? 'flex' : 'none';
         if (active) positionTimer();
         document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
+        document.getElementById('hintsWrap').style.visibility  = active ? 'hidden' : 'visible';
         // баннер установки не должен закрывать игру
         if (window.uhrzeitInstall) {
             if (active) window.uhrzeitInstall.hide();
@@ -1094,6 +1103,16 @@
         }
         // Кнопка 🔊 видна всегда: записанный голос работает и без Speech API
         document.getElementById('btnSpeak').style.display = 'inline-block';
+
+        // Подсказки: запоминаем выбор, по умолчанию включены
+        showHints = lsGet('uhrzeit_hints') !== '0';
+        document.getElementById('chkHints').checked = showHints;
+        document.getElementById('chkHints').addEventListener('change', function () {
+            showHints = this.checked;
+            lsSet('uhrzeit_hints', showHints ? '1' : '0');
+            displayCanvas();
+        });
+        displayCanvas();
     });
 
     window.addEventListener('load', async function() {

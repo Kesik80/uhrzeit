@@ -976,36 +976,43 @@
     // пока не записанных фраз остаётся системный голос.
     var VOICE_DIR = 'voice/de/laura/';   // папка выбранного голоса; у каждого голоса своя
     var voiceMissing = {};          // key → true, если файла нет (не стучимся повторно)
-    var voiceAudio = null;
+    var voiceAudio = null;      // текущий проигрываемый файл
+    var playToken = {};         // метка: меняется при каждом новом запуске
 
+    // Новое нажатие обрывает предыдущее: звуки не должны накладываться
     function stopSpeech() {
-        if (voiceAudio) { try { voiceAudio.pause(); } catch (e) {} voiceAudio = null; }
+        playToken = {};                           // всё, что играло раньше, становится «чужим»
+        if (voiceAudio) {
+            try { voiceAudio.pause(); voiceAudio.currentTime = 0; } catch (e) {}
+            voiceAudio = null;
+        }
         if (speechSupported) window.speechSynthesis.cancel();
     }
 
     // Проигрываем цепочку файлов подряд; если какого-то нет — системный голос
     function playKeys(keys, fallbackText) {
         stopSpeech();
+        var token = playToken;                    // метка этого воспроизведения
         var i = 0;
-        var token = {};
-        voiceAudio = token;                       // метка текущего воспроизведения
         function next() {
-            if (voiceAudio !== token) return;     // уже запустили что-то другое
+            if (playToken !== token) return;      // уже запустили что-то другое
             if (i >= keys.length) { voiceAudio = null; return; }
             var key = keys[i++];
             if (voiceMissing[key]) return fail();
             var a = new Audio(VOICE_DIR + key + '.mp3');
+            voiceAudio = a;                       // ссылка на сам звук — чтобы его можно было оборвать
             a.addEventListener('ended', next);
             a.addEventListener('error', function () { voiceMissing[key] = true; fail(); });
             var pr = a.play();
             if (pr && pr.catch) pr.catch(function (e) {
+                if (playToken !== token) return;
                 if (e && e.name === 'NotAllowedError') { voiceAudio = null; return; }
                 voiceMissing[key] = true;
                 fail();
             });
         }
         function fail() {
-            if (voiceAudio !== token) return;
+            if (playToken !== token) return;
             voiceAudio = null;
             speakSystem(fallbackText);
         }

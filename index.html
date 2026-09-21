@@ -450,14 +450,11 @@
     }
 
     function drawSectors(context, xCenter, yCenter, radius) {
-        // На тёмном циферблате те же оттенки делаются заметно слабее
-        const warm = isDark ? 'rgba(255, 190, 170, 0.10)' : 'rgba(255, 187, 165, 0.3)';
-        const cool = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 242, 226, 0.3)';
         const sectors = [
-            { startHour: 6,  endHour: 7,  color: cool },
-            { startHour: 5,  endHour: 6,  color: warm },
-            { startHour: 7,  endHour: 12, color: warm },
-            { startHour: 12, endHour: 5,  color: cool },
+            { startHour: 6,  endHour: 7,  color: 'rgba(255, 242, 226, 0.3)' },
+            { startHour: 5,  endHour: 6,  color: 'rgba(255, 187, 165, 0.3)' },
+            { startHour: 7,  endHour: 12, color: 'rgba(255, 187, 165, 0.3)' },
+            { startHour: 12, endHour: 5,  color: 'rgba(255, 242, 226, 0.3)' },
         ];
         sectors.forEach(({ startHour, endHour, color }) => {
             const { startAngle, endAngle } = getAngles(startHour, endHour);
@@ -587,16 +584,9 @@
         context.closePath();
     }
 
-    // ── Палитра циферблата: ночью тёмный, днём прежний светлый ──
-    var FACE = {};
-    function updateFace() {
-        FACE = isDark
-            ? { face: '#23252b', num: '#e9e9ee', tickMajor: '#d4d4dc', tickMinor: '#8a8a94',
-                hand: '#f0f0f4', dot: '#9a9aa4', line: 'rgba(255,255,255,0.25)' }
-            : { face: '#f5f0e8', num: '#111111', tickMajor: '#000000', tickMinor: '#666666',
-                hand: '#000000', dot: '#CCCCCC', line: '#000000' };
-    }
-    updateFace();
+    // ── Палитра циферблата: всегда светлый, в обеих темах ──
+    var FACE = { face: '#f5f0e8', num: '#111111', tickMajor: '#000000', tickMinor: '#666666',
+                 hand: '#000000', dot: '#CCCCCC', line: '#000000' };
 
     // ── Слои: неподвижная часть рисуется один раз и кэшируется ──
     // Иначе плавная секундная стрелка перерисовывала бы градиенты 30 раз в секунду.
@@ -661,7 +651,7 @@
         for (var tm = 0; tm < 60; tm++) {
             ctx.beginPath();
             ctx.strokeStyle = tm % 5 === 0 ? FACE.tickMajor : FACE.tickMinor;
-            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : FACE.tickMinor;
+            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : '#cccccc';
             if (tm % 15 === 0) {
                 ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
                 ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
@@ -1164,7 +1154,6 @@
         document.documentElement.classList.toggle('light', !dark);
         document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
         syncThemeColor();
-        updateFace();
         displayCanvas();
     }
 

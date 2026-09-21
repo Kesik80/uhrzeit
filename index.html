@@ -352,7 +352,7 @@
         hour   = d.getHours();
         minute = d.getMinutes();
         second = d.getSeconds();
-        displayCanvas();
+        requestFrame();          // отрисовкой занимается кадр анимации
         showGermanTime();
     }
 
@@ -361,6 +361,7 @@
         if (!clockInterval) {
             isClockPaused = false;
             tick();                      // сразу, без секундной задержки
+            requestFrame();
             clockInterval = setInterval(tick, 1000);
         }
     }
@@ -448,20 +449,15 @@
         });
     }
 
-    // Правая половина — nach (тёплая), левая — vor (холодная).
-    // Цвета взяты из дуг, чтобы половины и надписи читались как одно целое.
-    // #RRGGBB → rgba(...) с нужной прозрачностью
-    function hexA(hex, a) {
-        var c = String(hex || '#888888').replace('#', '');
-        if (c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
-        return 'rgba(' + parseInt(c.substr(0, 2), 16) + ',' + parseInt(c.substr(2, 2), 16) + ',' +
-               parseInt(c.substr(4, 2), 16) + ',' + a + ')';
-    }
-
     function drawSectors(context, xCenter, yCenter, radius) {
+        // На тёмном циферблате те же оттенки делаются заметно слабее
+        const warm = isDark ? 'rgba(255, 190, 170, 0.10)' : 'rgba(255, 187, 165, 0.3)';
+        const cool = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 242, 226, 0.3)';
         const sectors = [
-            { startHour: 12, endHour: 6, color: hexA(ARC.colorRight, 0.20) },   // 12 → 6: nach
-            { startHour: 6,  endHour: 12, color: hexA(ARC.colorLeft,  0.20) },  // 6 → 12: vor
+            { startHour: 6,  endHour: 7,  color: cool },
+            { startHour: 5,  endHour: 6,  color: warm },
+            { startHour: 7,  endHour: 12, color: warm },
+            { startHour: 12, endHour: 5,  color: cool },
         ];
         sectors.forEach(({ startHour, endHour, color }) => {
             const { startAngle, endAngle } = getAngles(startHour, endHour);
@@ -474,11 +470,10 @@
         });
     }
 
-    // Граница половин: тонкая ось 12–6
     function drawLinesFromCenter(context, xCenter, yCenter, radius) {
-        context.strokeStyle = 'rgba(0,0,0,0.25)';
+        context.strokeStyle = FACE.line;
         context.lineWidth   = 1;   // ctx уже масштабирован
-        const hours = [6, 0];
+        const hours = [7, 6, 5, 0];
         hours.forEach(function(h) {
             const angle = (h - 3) * (Math.PI / 6);
             context.beginPath();
@@ -566,53 +561,16 @@
         context.textBaseline = 'middle';
         clearShadow(context);
 
-        // Активная подсказка — ближайшая к положению минутной стрелки.
-        // Ищем по углу, а не по порядку в списке: надписи можно двигать и удалять в редакторе.
-        var activeHour = (Math.round(minute / 5) % 12) || 12;   // 0 мин → надпись у 12
-        var active = -1, bestD = 1.2;                           // дальше ~1.2 часа не подсвечиваем
-        CLOCK_TEXTS.forEach(function (cfg, i) {
-            var d = Math.abs(((cfg.textHour - activeHour + 18) % 12) - 6);   // разница по кругу
-            if (d < bestD) { bestD = d; active = i; }
-        });
-
-        CLOCK_TEXTS.forEach(function(cfg, idx) {
-            const on       = (idx === active);
+        CLOCK_TEXTS.forEach(function(cfg) {
             const posAngle = (cfg.textHour - 3) * Math.PI / 6;
             const r        = baseR * cfg.radius_k;
             const x        = xCenter + r * Math.cos(posAngle);
             const y        = yCenter + r * Math.sin(posAngle);
             const totalH   = (cfg.lines.length - 1) * lineH;
-
-            context.save();
-            if (on) {
-                // подложка вместо увеличения шрифта: надпись у края экрана не обрежется
-                var w = 0;
-                cfg.lines.forEach(function (line) {
-                    var lw = 0;
-                    line.forEach(function (word) { lw += context.measureText(word.t).width; });
-                    if (lw > w) w = lw;
-                });
-                context.fillStyle = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.07)';
-                roundRect(context, x - 7, y - totalH / 2 - lineH * 0.62, w + 14, totalH + lineH * 1.24, 8);
-                context.fill();
-            } else {
-                context.globalAlpha = 0.38;                 // остальные приглушены
-            }
             cfg.lines.forEach(function(line, i) {
                 drawColoredLine(context, line, x, y - totalH / 2 + i * lineH);
             });
-            context.restore();
         });
-    }
-
-    function roundRect(context, x, y, w, h, r) {
-        context.beginPath();
-        context.moveTo(x + r, y);
-        context.arcTo(x + w, y, x + w, y + h, r);
-        context.arcTo(x + w, y + h, x, y + h, r);
-        context.arcTo(x, y + h, x, y, r);
-        context.arcTo(x, y, x + w, y, r);
-        context.closePath();
     }
 
     function drawHand(context, angle, length, xCenter, yCenter, width, color) {
@@ -629,18 +587,52 @@
         context.closePath();
     }
 
-    function displayCanvas() {
-        if (clockRadius === undefined) return;   // ещё не было resizeCanvas()
-        const s = scale();
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // ── Палитра циферблата: ночью тёмный, днём прежний светлый ──
+    var FACE = {};
+    function updateFace() {
+        FACE = isDark
+            ? { face: '#23252b', num: '#e9e9ee', tickMajor: '#d4d4dc', tickMinor: '#8a8a94',
+                hand: '#f0f0f4', dot: '#9a9aa4', line: 'rgba(255,255,255,0.25)' }
+            : { face: '#f5f0e8', num: '#111111', tickMajor: '#000000', tickMinor: '#666666',
+                hand: '#000000', dot: '#CCCCCC', line: '#000000' };
+    }
+    updateFace();
 
-        ctx.save();
-        ctx.scale(s, s);
+    // ── Слои: неподвижная часть рисуется один раз и кэшируется ──
+    // Иначе плавная секундная стрелка перерисовывала бы градиенты 30 раз в секунду.
+    var layerUnder = null, layerOver = null, layerKey = '';
+    var settingsRev = 0;   // растёт при смене надписей/дуг
 
+    function layerState() {
+        return [canvas.width, canvas.height, isDark, showHints, isGameMode, settingsRev].join('|');
+    }
+
+    function buildLayers() {
+        var w = canvas.width, h = canvas.height, s = scale();
+        if (!layerUnder) { layerUnder = document.createElement('canvas'); layerOver = document.createElement('canvas'); }
+        layerUnder.width = layerOver.width = w;
+        layerUnder.height = layerOver.height = h;
+
+        var cu = layerUnder.getContext('2d');
+        cu.clearRect(0, 0, w, h);
+        cu.save(); cu.scale(s, s);
+        drawUnder(cu, s);
+        cu.restore();
+
+        var co = layerOver.getContext('2d');
+        co.clearRect(0, 0, w, h);
+        co.save(); co.scale(s, s);
+        drawOver(co, s);
+        co.restore();
+
+        layerKey = layerState();
+    }
+
+    function drawUnder(ctx, s) {
         // ── Белый фон циферблата (всегда светлый, не зависит от темы страницы) ──
         ctx.beginPath();
         ctx.arc(clockCenterX, clockCenterY, clockRadius - padding, 0, 2 * Math.PI);
-        ctx.fillStyle = '#f5f0e8';
+        ctx.fillStyle = FACE.face;
         ctx.fill();
         ctx.closePath();
 
@@ -668,8 +660,8 @@
         // Деления
         for (var tm = 0; tm < 60; tm++) {
             ctx.beginPath();
-            ctx.strokeStyle = tm % 15 === 0 ? '#000000' : (tm % 5 === 0 ? '#000000' : '#666666');
-            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : '#cccccc';
+            ctx.strokeStyle = tm % 5 === 0 ? FACE.tickMajor : FACE.tickMinor;
+            ctx.fillStyle   = tm % 15 === 0 ? '#FFD700' : FACE.tickMinor;
             if (tm % 15 === 0) {
                 ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
                 ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
@@ -707,21 +699,25 @@
             ctx.font         = 'bold 32px Tahoma';
             ctx.textAlign    = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle    = '#111111'; // цифры всегда тёмные — фон циферблата белый
+            ctx.fillStyle    = FACE.num;
             var xT = clockCenterX + (numbersRadius - 30) * Math.cos(-30 * th * (Math.PI / 180) + Math.PI / 2);
             var yT = clockCenterY - (numbersRadius - 30) * Math.sin(-30 * th * (Math.PI / 180) + Math.PI / 2);
             ctx.fillText(th, xT, yT);
             ctx.closePath();
         }
 
+    }
+
+    function drawHandsLayer(ctx, s) {
         // Тень для стрелок
         ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
-        // Часовая — короткая и толстая, минутная — длинная и тонкая, чтобы не сливались
-        drawHand(ctx, (hour % 12 + minute / 60) * (Math.PI / 6), numbersRadius / 1.75, clockCenterX, clockCenterY, 9, '#111111');
-        drawHand(ctx, minute * (Math.PI / 30), numbersRadius + 4, clockCenterX, clockCenterY, 4.5, '#4a4a4a');
+        // Часовая толще прежнего, длина прежняя
+        drawHand(ctx, animHour * (Math.PI / 6), numbersRadius / 1.4, clockCenterX, clockCenterY, 9, FACE.hand);
+        drawHand(ctx, animMinute * (Math.PI / 30), numbersRadius - 10, clockCenterX, clockCenterY, 4, FACE.hand);
         if (!isClockPaused) {
-            drawHand(ctx, second * (Math.PI / 30), numbersRadius - 20, clockCenterX, clockCenterY, 2, 'red');
+            // плавный ход: доли секунды, а не рывок раз в секунду
+            drawHand(ctx, animSecond * (Math.PI / 30), numbersRadius - 20, clockCenterX, clockCenterY, 2, 'red');
         }
         ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
@@ -731,11 +727,14 @@
         ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
         ctx.beginPath();
-        ctx.strokeStyle = '#000000'; ctx.fillStyle = '#CCCCCC'; ctx.lineWidth = 3;
+        ctx.strokeStyle = FACE.hand; ctx.fillStyle = FACE.dot; ctx.lineWidth = 3;
         ctx.arc(clockCenterX, clockCenterY, 6, 0, 2 * Math.PI, true);
         ctx.stroke(); ctx.fill(); ctx.closePath();
         ctx.restore();
 
+    }
+
+    function drawOver(ctx, s) {
         // Безель
         const bezelInnerRadius = clockRadius - padding;
         const bezelOuterRadius = bezelInnerRadius + bezelThickness;
@@ -830,8 +829,64 @@
         ctx.ellipse(clockCenterX, clockCenterY + clockRadius / 3, clockRadius / 3, clockRadius / 15, 0, 0, 2 * Math.PI);
         ctx.fillStyle = 'rgba(255,255,255,' + hl4A + ')'; ctx.fill(); ctx.closePath();
 
-        ctx.restore(); // снимаем scale(s, s)
     }
+
+    // ── Положения стрелок: доезжают плавно ──
+    var animHour = 0, animMinute = 0, animSecond = 0, animReady = false;
+
+    function targets() {
+        if (isClockPaused) return { h: hour % 12 + minute / 60, m: minute, s: animSecond };
+        var now = new Date();
+        var sec = now.getSeconds() + now.getMilliseconds() / 1000;
+        return { h: hour % 12 + minute / 60, m: minute + sec / 60, s: sec };
+    }
+
+    // кратчайший путь по кругу: с 59 на 0 стрелка не едет назад через весь циферблат
+    function ease(cur, target, period, k) {
+        var d = ((target - cur + period * 1.5) % period) - period / 2;
+        if (Math.abs(d) < 0.0005) return target;
+        return cur + d * k;
+    }
+
+    function displayCanvas() {
+        if (clockRadius === undefined) return;   // ещё не было resizeCanvas()
+        var t = targets();
+        if (!animReady) { animHour = t.h; animMinute = t.m; animSecond = t.s; animReady = true; }
+        var s = scale();
+
+        if (layerKey !== layerState()) buildLayers();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(layerUnder, 0, 0);
+        ctx.save();
+        ctx.scale(s, s);
+        drawHandsLayer(ctx, s);
+        ctx.restore();
+        ctx.drawImage(layerOver, 0, 0);
+    }
+
+    // Кадр анимации: стрелки подтягиваются к цели, секундная идёт непрерывно
+    var animRaf = null;
+    function animate() {
+        animRaf = null;
+        if (clockRadius === undefined) return;
+        var t = targets();
+        var moving = false;
+
+        var nh = ease(animHour, t.h, 12, 0.22);
+        var nm = ease(animMinute, t.m, 60, 0.22);
+        if (nh !== animHour || nm !== animMinute) moving = true;
+        animHour = nh; animMinute = nm;
+
+        if (!isClockPaused) { animSecond = t.s; moving = true; }
+
+        if (moving) displayCanvas();
+        if (moving || !isClockPaused) requestFrame();
+    }
+    function requestFrame() {
+        if (animRaf === null && document.visibilityState === 'visible') animRaf = requestAnimationFrame(animate);
+    }
+    document.addEventListener('visibilitychange', function () { if (!isClockPaused) requestFrame(); });
 
     // ─── TOUCH / CLICK ───────────────────────────────────────────────────────
     function isTouchDevice() {
@@ -870,7 +925,7 @@
             minute = Math.round(degrees / 6) % 60;
         }
 
-        displayCanvas();
+        requestFrame();          // стрелки доезжают плавно
         showGermanTime();
     }
 
@@ -1109,6 +1164,7 @@
         document.documentElement.classList.toggle('light', !dark);
         document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
         syncThemeColor();
+        updateFace();
         displayCanvas();
     }
 
@@ -1173,6 +1229,7 @@
                 CLOCK_TEXTS = t;
             }
             if (saved.ARC && typeof saved.ARC === 'object') Object.assign(ARC, saved.ARC);
+            settingsRev++;                       // надписи изменились — перестроить слои
             displayCanvas();
         }
     });

@@ -448,12 +448,20 @@
         });
     }
 
+    // Правая половина — nach (тёплая), левая — vor (холодная).
+    // Цвета взяты из дуг, чтобы половины и надписи читались как одно целое.
+    // #RRGGBB → rgba(...) с нужной прозрачностью
+    function hexA(hex, a) {
+        var c = String(hex || '#888888').replace('#', '');
+        if (c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+        return 'rgba(' + parseInt(c.substr(0, 2), 16) + ',' + parseInt(c.substr(2, 2), 16) + ',' +
+               parseInt(c.substr(4, 2), 16) + ',' + a + ')';
+    }
+
     function drawSectors(context, xCenter, yCenter, radius) {
         const sectors = [
-            { startHour: 6,  endHour: 7,  color: 'rgba(255, 242, 226, 0.3)' },
-            { startHour: 5,  endHour: 6,  color: 'rgba(255, 187, 165, 0.3)' },
-            { startHour: 7,  endHour: 12, color: 'rgba(255, 187, 165, 0.3)' },
-            { startHour: 12, endHour: 5,  color: 'rgba(255, 242, 226, 0.3)' },
+            { startHour: 12, endHour: 6, color: hexA(ARC.colorRight, 0.20) },   // 12 → 6: nach
+            { startHour: 6,  endHour: 12, color: hexA(ARC.colorLeft,  0.20) },  // 6 → 12: vor
         ];
         sectors.forEach(({ startHour, endHour, color }) => {
             const { startAngle, endAngle } = getAngles(startHour, endHour);
@@ -466,10 +474,11 @@
         });
     }
 
+    // Граница половин: тонкая ось 12–6
     function drawLinesFromCenter(context, xCenter, yCenter, radius) {
-        context.strokeStyle = '#000000';
+        context.strokeStyle = 'rgba(0,0,0,0.25)';
         context.lineWidth   = 1;   // ctx уже масштабирован
-        const hours = [7, 6, 5, 0];
+        const hours = [6, 0];
         hours.forEach(function(h) {
             const angle = (h - 3) * (Math.PI / 6);
             context.beginPath();
@@ -557,16 +566,53 @@
         context.textBaseline = 'middle';
         clearShadow(context);
 
-        CLOCK_TEXTS.forEach(function(cfg) {
+        // Активная подсказка — ближайшая к положению минутной стрелки.
+        // Ищем по углу, а не по порядку в списке: надписи можно двигать и удалять в редакторе.
+        var activeHour = (Math.round(minute / 5) % 12) || 12;   // 0 мин → надпись у 12
+        var active = -1, bestD = 1.2;                           // дальше ~1.2 часа не подсвечиваем
+        CLOCK_TEXTS.forEach(function (cfg, i) {
+            var d = Math.abs(((cfg.textHour - activeHour + 18) % 12) - 6);   // разница по кругу
+            if (d < bestD) { bestD = d; active = i; }
+        });
+
+        CLOCK_TEXTS.forEach(function(cfg, idx) {
+            const on       = (idx === active);
             const posAngle = (cfg.textHour - 3) * Math.PI / 6;
             const r        = baseR * cfg.radius_k;
             const x        = xCenter + r * Math.cos(posAngle);
             const y        = yCenter + r * Math.sin(posAngle);
             const totalH   = (cfg.lines.length - 1) * lineH;
+
+            context.save();
+            if (on) {
+                // подложка вместо увеличения шрифта: надпись у края экрана не обрежется
+                var w = 0;
+                cfg.lines.forEach(function (line) {
+                    var lw = 0;
+                    line.forEach(function (word) { lw += context.measureText(word.t).width; });
+                    if (lw > w) w = lw;
+                });
+                context.fillStyle = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.07)';
+                roundRect(context, x - 7, y - totalH / 2 - lineH * 0.62, w + 14, totalH + lineH * 1.24, 8);
+                context.fill();
+            } else {
+                context.globalAlpha = 0.38;                 // остальные приглушены
+            }
             cfg.lines.forEach(function(line, i) {
                 drawColoredLine(context, line, x, y - totalH / 2 + i * lineH);
             });
+            context.restore();
         });
+    }
+
+    function roundRect(context, x, y, w, h, r) {
+        context.beginPath();
+        context.moveTo(x + r, y);
+        context.arcTo(x + w, y, x + w, y + h, r);
+        context.arcTo(x + w, y + h, x, y + h, r);
+        context.arcTo(x, y + h, x, y, r);
+        context.arcTo(x, y, x + w, y, r);
+        context.closePath();
     }
 
     function drawHand(context, angle, length, xCenter, yCenter, width, color) {
@@ -671,9 +717,9 @@
         // Тень для стрелок
         ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
-        var handColor = '#000000';
-        drawHand(ctx, (hour % 12 + minute / 60) * (Math.PI / 6), numbersRadius / 1.4, clockCenterX, clockCenterY, 6, handColor);
-        drawHand(ctx, minute * (Math.PI / 30), numbersRadius - 10, clockCenterX, clockCenterY, 4, handColor);
+        // Часовая — короткая и толстая, минутная — длинная и тонкая, чтобы не сливались
+        drawHand(ctx, (hour % 12 + minute / 60) * (Math.PI / 6), numbersRadius / 1.75, clockCenterX, clockCenterY, 9, '#111111');
+        drawHand(ctx, minute * (Math.PI / 30), numbersRadius + 4, clockCenterX, clockCenterY, 4.5, '#4a4a4a');
         if (!isClockPaused) {
             drawHand(ctx, second * (Math.PI / 30), numbersRadius - 20, clockCenterX, clockCenterY, 2, 'red');
         }

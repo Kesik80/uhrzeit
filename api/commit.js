@@ -19,6 +19,7 @@ function safePath(p) {
   const clean = p.replace(/^\/+/, '');
   if (clean.includes('..') || clean.length > 120) return null;
   // наборы: ЧЧ-ММ (ровные), g-/k-ЧЧ-ММ (неровные), o-ЧЧ-ММ (offiziell)
+  if (clean === 'voice/de/voices.json') return clean;   // общий список голосов для часов
   if (!/^voice\/de\/[a-z0-9-]{1,24}\/(([gko]-)?\d{2}-\d{2}\.mp3|voice\.json)$/.test(clean)) return null;
   return clean;
 }

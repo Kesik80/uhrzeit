@@ -72,6 +72,13 @@
             letter-spacing: 0.05em;
         }
 
+        #clock, #clock-exact, #clock-ru {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         #clock {
             font-size: clamp(16px, 5vw, 24px);
             color: var(--clock-de);
@@ -237,6 +244,12 @@
     <label id="normalSpeakWrap" style="display:flex;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);cursor:pointer;user-select:none;margin-top:2px">
         <input type="checkbox" id="chkNormalSpeak" style="width:16px;height:16px;cursor:pointer;accent-color:#2ecc71">
         🔊 Авто-звук
+    </label>
+
+    <!-- Голос озвучки: список папок из voice/de/voices.json -->
+    <label id="voiceWrap" style="display:none;align-items:center;gap:6px;font-size:clamp(12px,3.5vw,14px);color:var(--hint);margin-top:4px">
+        🎙 Голос
+        <select id="voiceSel" style="font-size:inherit;color:inherit;background:transparent;border:1px solid currentColor;border-radius:8px;padding:3px 6px"></select>
     </label>
 
     <a href="editor.html" id="editorLink" style="font-size:11px;color:var(--hint);text-decoration:none;margin-top:2px">⚙ Редактор надписей</a>
@@ -966,6 +979,7 @@
         if (active) positionTimer();
         document.getElementById('editorLink').style.visibility = active ? 'hidden' : 'visible';
         document.getElementById('hintsWrap').style.visibility  = active ? 'hidden' : 'visible';
+        document.getElementById('voiceWrap').style.visibility  = active ? 'hidden' : 'visible';
         // баннер установки не должен закрывать игру
         if (window.uhrzeitInstall) {
             if (active) window.uhrzeitInstall.hide();
@@ -1077,8 +1091,37 @@
     // ── Озвучка: записанный голос (voice/de/<голос>/HH-MM.mp3) → иначе системный ──
     // Файлы создаются на странице voicegen.html. Для «gleich / kurz nach» и
     // пока не записанных фраз остаётся системный голос.
-    var VOICE_DIR = 'voice/de/laura/';   // папка выбранного голоса; у каждого голоса своя
-    var voiceMissing = {};          // key → true, если файла нет (не стучимся повторно)
+    // Голоса: папки voice/de/<голос>/. Список пишет voicegen.html в voice/de/voices.json.
+    var VOICES = [{ slug: 'laura', name: 'Laura' }, { slug: 'matilda', name: 'Matilda' }];  // до загрузки списка
+    var voiceSlug = lsGet('uhrzeit_voice') || 'laura';
+    var voiceMissing = {};          // 'папка/ключ' → true, если файла нет (не стучимся повторно)
+
+    // Порядок поиска файла: сначала выбранный голос, потом остальные.
+    // Так, если offiziell записан только голосом Matilda, он всё равно зазвучит.
+    function voiceOrder() {
+        var list = [voiceSlug];
+        VOICES.forEach(function (v) { if (list.indexOf(v.slug) < 0) list.push(v.slug); });
+        return list;
+    }
+
+    function renderVoiceSel() {
+        var sel = document.getElementById('voiceSel');
+        sel.innerHTML = VOICES.map(function (v) {
+            return '<option value="' + v.slug + '"' + (v.slug === voiceSlug ? ' selected' : '') + '>' + v.name + '</option>';
+        }).join('');
+        document.getElementById('voiceWrap').style.display = VOICES.length > 1 ? 'flex' : 'none';
+    }
+
+    async function loadVoiceList() {
+        try {
+            var r = await fetch('voice/de/voices.json', { cache: 'no-store' });
+            if (!r.ok) return;
+            var d = await r.json();
+            if (Array.isArray(d.voices) && d.voices.length) VOICES = d.voices;
+        } catch (e) {}
+        if (!VOICES.some(function (v) { return v.slug === voiceSlug; })) voiceSlug = VOICES[0].slug;
+        renderVoiceSel();
+    }
     var voiceAudio = null;      // текущий проигрываемый файл
     var playToken = {};         // метка: меняется при каждом новом запуске
 
@@ -1100,18 +1143,28 @@
         function next() {
             if (playToken !== token) return;      // уже запустили что-то другое
             if (i >= keys.length) { voiceAudio = null; return; }
-            var key = keys[i++];
-            if (voiceMissing[key]) return fail();
-            var a = new Audio(VOICE_DIR + key + '.mp3');
+            playFrom(keys[i++], voiceOrder(), 0);
+        }
+        // один файл: пробуем папки по очереди, пока не найдём
+        function playFrom(key, dirs, d) {
+            if (playToken !== token) return;
+            while (d < dirs.length && voiceMissing[dirs[d] + '/' + key]) d++;
+            if (d >= dirs.length) return fail();
+            var id = dirs[d] + '/' + key;
+            var a = new Audio('voice/de/' + id + '.mp3');
             voiceAudio = a;                       // ссылка на сам звук — чтобы его можно было оборвать
             a.addEventListener('ended', next);
-            a.addEventListener('error', function () { voiceMissing[key] = true; fail(); });
+            a.addEventListener('error', function () {
+                if (playToken !== token) return;
+                voiceMissing[id] = true;
+                playFrom(key, dirs, d + 1);
+            });
             var pr = a.play();
             if (pr && pr.catch) pr.catch(function (e) {
                 if (playToken !== token) return;
                 if (e && e.name === 'NotAllowedError') { voiceAudio = null; return; }
-                voiceMissing[key] = true;
-                fail();
+                voiceMissing[id] = true;
+                playFrom(key, dirs, d + 1);
             });
         }
         function fail() {
@@ -1128,7 +1181,7 @@
         playKeys([phraseKey(hour, minute)], text);
     }
 
-    // Нажатие на строку «offiziell: …» — читается по двум файлам: час и минута
+    // Нажатие на строку «offiziell: …» — один файл o-ЧЧ-ММ
     function speakOfficial() {
         if (isGameMode) return;
         var text = document.getElementById('clock-exact').textContent.replace('offiziell: ', '');
@@ -1197,6 +1250,15 @@
         }
         // Кнопка 🔊 видна всегда: записанный голос работает и без Speech API
         document.getElementById('btnSpeak').style.display = 'inline-block';
+
+        // Голос озвучки
+        renderVoiceSel();
+        loadVoiceList();
+        document.getElementById('voiceSel').addEventListener('change', function () {
+            voiceSlug = this.value;
+            lsSet('uhrzeit_voice', voiceSlug);
+            speakTime();                          // сразу слышно, как звучит новый голос
+        });
 
         // Подсказки: запоминаем выбор, по умолчанию включены
         showHints = lsGet('uhrzeit_hints') !== '0';

@@ -1248,6 +1248,18 @@
     // ── коммит ──────────────────────────────────────────────
     function b64utf8(str) { return btoa(unescape(encodeURIComponent(str))); }
 
+    // voice/de/voices.json с сайта (или пустой список, если его ещё нет)
+    async function loadVoiceIndex() {
+        try {
+            var r = await fetch('voice/de/voices.json', { cache: 'no-store' });
+            if (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0) {
+                var d = await r.json();
+                if (d && Array.isArray(d.voices)) return d.voices;
+            }
+        } catch (e) {}
+        return [];
+    }
+
     async function postCommit(body) {
         body.token = token;
         var r = await fetch('/api/commit', {
@@ -1287,6 +1299,14 @@
             var files = keys.map(function (k) { return { path: DIR() + k + '.mp3', content: st().fresh[k].audio }; });
             files.push({ path: DIR() + 'voice.json', content: b64utf8(JSON.stringify(m, null, 1)) });
 
+            // общий список голосов — по нему часы показывают выбор голоса
+            var list = await loadVoiceIndex();
+            var slug = slugOf(voiceName);
+            if (!list.some(function (v) { return v.slug === slug; })) {
+                list.push({ slug: slug, name: String(voiceName).split(' - ')[0].trim() });
+                files.push({ path: 'voice/de/voices.json', content: b64utf8(JSON.stringify({ voices: list }, null, 1)) });
+            }
+
             // пачки до ~3 МБ — лимит запроса Vercel 4,5 МБ
             var batches = [], cur = [], size = 0;
             files.forEach(function (f) {
@@ -1311,7 +1331,7 @@
                              .filter(function (k) { return st().fresh[k]; });
             if (!okKeys.length) throw new Error('ни один файл не залился');
             // voice.json пишем, только если он долетел
-            tree = tree.filter(function (t) { return /voice\.json$/.test(t.path) || okKeys.indexOf(t.path.split('/').pop().replace('.mp3', '')) >= 0; });
+            tree = tree.filter(function (t) { return /voices?\.json$/.test(t.path) || okKeys.indexOf(t.path.split('/').pop().replace('.mp3', '')) >= 0; });
 
             $('btnPub').textContent = 'коммит…';
             var c;

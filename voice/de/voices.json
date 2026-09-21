@@ -1,0 +1,6 @@
+{
+ "voices": [
+  { "slug": "laura", "name": "Laura" },
+  { "slug": "matilda", "name": "Matilda" }
+ ]
+}

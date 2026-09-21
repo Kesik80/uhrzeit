@@ -825,9 +825,13 @@
 
     function targets() {
         if (isClockPaused) return { h: hour % 12 + minute / 60, m: minute, s: animSecond };
+        // Часы, минуты и секунды берём из ОДНОГО момента времени.
+        // Раньше минуты шли из переменной, которая обновляется раз в секунду, а секунды — из
+        // текущего кадра: на смене минуты стрелка отскакивала на минуту назад.
         var now = new Date();
         var sec = now.getSeconds() + now.getMilliseconds() / 1000;
-        return { h: hour % 12 + minute / 60, m: minute + sec / 60, s: sec };
+        var min = now.getMinutes() + sec / 60;
+        return { h: now.getHours() % 12 + min / 60, m: min, s: sec };
     }
 
     // кратчайший путь по кругу: с 59 на 0 стрелка не едет назад через весь циферблат

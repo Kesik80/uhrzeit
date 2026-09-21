@@ -702,8 +702,7 @@
         // Тень для стрелок
         ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
-        // Часовая толще прежнего, длина прежняя
-        drawHand(ctx, animHour * (Math.PI / 6), numbersRadius / 1.4, clockCenterX, clockCenterY, 9, FACE.hand);
+        drawHand(ctx, animHour * (Math.PI / 6), numbersRadius / 1.4, clockCenterX, clockCenterY, 6, FACE.hand);
         drawHand(ctx, animMinute * (Math.PI / 30), numbersRadius - 10, clockCenterX, clockCenterY, 4, FACE.hand);
         if (!isClockPaused) {
             // плавный ход: доли секунды, а не рывок раз в секунду
